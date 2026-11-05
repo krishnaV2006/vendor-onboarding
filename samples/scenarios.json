@@ -1,0 +1,246 @@
+{
+  "scenarios": [
+    {
+      "key": "happy",
+      "tag": "Happy path",
+      "title": "Sharma Precision Tools Pvt Ltd",
+      "shows": "Clean application. The bank says PRIVATE LIMITED where the form says Pvt Ltd, and that's fine.",
+      "expected": "approved",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+91 98250 11223",
+        "pan": "AAFCS4821K",
+        "state": "Gujarat",
+        "legal_name": "Sharma Precision Tools Pvt Ltd",
+        "entity_type": "Private Limited",
+        "country": "IN",
+        "address": "Plot 14, GIDC Phase 2, Vatva",
+        "city": "Ahmedabad",
+        "postal_code": "382445",
+        "contact_name": "Neha Sharma",
+        "contact_email": "neha@sharmaprecision.example",
+        "tax_id": "24AAFCS4821K1ZB",
+        "account_holder": "SHARMA PRECISION TOOLS PRIVATE LIMITED",
+        "bank_name": "HDFC Bank",
+        "account_number": "50100234567891",
+        "bank_code": "HDFC0001234"
+      },
+      "documents": {
+        "tax_certificate": "happy_gst_certificate.pdf",
+        "bank_proof": "happy_cancelled_cheque.pdf"
+      }
+    },
+    {
+      "key": "personal_account",
+      "tag": "Edge case 1",
+      "title": "Bluepeak Logistics Pvt Ltd",
+      "shows": "The bank account is in a person's name. Pending, with a request for a company account. Then resubmit.",
+      "expected": "pending",
+      "fix_label": "Vendor supplies a company account and bank letter",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+91 98200 44556",
+        "pan": "AABCB7719M",
+        "state": "Maharashtra",
+        "legal_name": "Bluepeak Logistics Pvt Ltd",
+        "entity_type": "Private Limited",
+        "country": "IN",
+        "address": "402 Trade Centre, Andheri East",
+        "city": "Mumbai",
+        "postal_code": "400069",
+        "contact_name": "Ramesh Patel",
+        "contact_email": "ramesh.bluepeak@gmail.com",
+        "tax_id": "27AABCB7719M1ZB",
+        "account_holder": "Ramesh K Patel",
+        "bank_name": "ICICI Bank",
+        "account_number": "123456789012",
+        "bank_code": "ICIC0004567"
+      },
+      "documents": {
+        "tax_certificate": "bluepeak_gst_certificate.pdf",
+        "bank_proof": "bluepeak_cancelled_cheque.pdf"
+      },
+      "fix": {
+        "changes": {
+          "account_holder": "BLUEPEAK LOGISTICS PRIVATE LIMITED",
+          "account_number": "001205009876"
+        },
+        "documents": {
+          "bank_proof": "bluepeak_bank_letter.pdf"
+        }
+      }
+    },
+    {
+      "key": "gstin_conflict",
+      "tag": "Edge case 2",
+      "title": "Nandi Components LLP",
+      "shows": "The GSTIN passes its checksum, but the PAN inside it and its state code contradict the form.",
+      "expected": "pending",
+      "fix_label": "Vendor supplies the right GSTIN and certificate",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+91 90990 33221",
+        "pan": "AAHFN3344Q",
+        "state": "Gujarat",
+        "legal_name": "Nandi Components LLP",
+        "entity_type": "LLP",
+        "country": "IN",
+        "address": "22 Industrial Estate, Makarpura",
+        "city": "Vadodara",
+        "postal_code": "390010",
+        "contact_name": "Arjun Nandi",
+        "contact_email": "arjun@nandicomponents.example",
+        "tax_id": "27AAHFN3345R1ZN",
+        "account_holder": "Nandi Components LLP",
+        "bank_name": "Axis Bank",
+        "account_number": "917020045518822",
+        "bank_code": "UTIB0000456"
+      },
+      "documents": {
+        "tax_certificate": "nandi_gst_certificate.pdf",
+        "bank_proof": "nandi_cancelled_cheque.pdf"
+      },
+      "fix": {
+        "changes": {
+          "tax_id": "24AAHFN3344Q1ZW"
+        },
+        "documents": {
+          "tax_certificate": "nandi_gst_certificate_gujarat.pdf"
+        }
+      }
+    },
+    {
+      "key": "shared_bank",
+      "tag": "Edge case 3",
+      "title": "Apex Industrial Supplies Pvt Ltd",
+      "shows": "A flawless application, but the bank account is already on file for another vendor. The vendor isn't told why.",
+      "expected": "rejected",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+91 98670 55443",
+        "pan": "AAECA6102D",
+        "state": "Maharashtra",
+        "legal_name": "Apex Industrial Supplies Pvt Ltd",
+        "entity_type": "Private Limited",
+        "country": "IN",
+        "address": "9 Wagle Estate, Road 16",
+        "city": "Thane",
+        "postal_code": "400604",
+        "contact_name": "Vikram Rao",
+        "contact_email": "vikram@apexindustrial.example",
+        "tax_id": "27AAECA6102D1Z9",
+        "account_holder": "APEX INDUSTRIAL SUPPLIES PRIVATE LIMITED",
+        "bank_name": "Axis Bank",
+        "account_number": "918020045671234",
+        "bank_code": "UTIB0000123"
+      },
+      "documents": {
+        "tax_certificate": "apex_gst_certificate.pdf",
+        "bank_proof": "apex_cancelled_cheque.pdf"
+      }
+    },
+    {
+      "key": "wrong_docs",
+      "tag": "Edge case 4",
+      "title": "Cedar Ridge Software LLC",
+      "shows": "US vendor uploads an invoice instead of a W-9 and no bank proof. The AI spots what the document really is.",
+      "expected": "pending",
+      "fix_label": "Vendor uploads the W-9 and a bank letter",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+1 415 555 0142",
+        "pan": "",
+        "state": "California",
+        "legal_name": "Cedar Ridge Software LLC",
+        "entity_type": "LLC",
+        "country": "US",
+        "address": "1200 Market Street, Suite 400",
+        "city": "San Francisco",
+        "postal_code": "94102",
+        "contact_name": "Dana Whitfield",
+        "contact_email": "dana@cedarridge.example",
+        "tax_id": "84-1234567",
+        "account_holder": "Cedar Ridge Software LLC",
+        "bank_name": "JPMorgan Chase",
+        "account_number": "483920175566",
+        "bank_code": "021000021"
+      },
+      "documents": {
+        "tax_certificate": "cedar_invoice.pdf"
+      },
+      "fix": {
+        "documents": {
+          "tax_certificate": "cedar_w9.pdf",
+          "bank_proof": "cedar_bank_letter.pdf"
+        }
+      }
+    },
+    {
+      "key": "scanned",
+      "tag": "Bonus",
+      "title": "Thames Valley Fabrication Ltd",
+      "shows": "The bank letter is a scan with no text layer, so only AI can read it. If AI is down, a person gets it.",
+      "expected": "approved",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+44 118 496 0123",
+        "pan": "",
+        "state": "",
+        "legal_name": "Thames Valley Fabrication Ltd",
+        "entity_type": "Limited",
+        "country": "GB",
+        "address": "Unit 3, Station Road Industrial Park",
+        "city": "Reading",
+        "postal_code": "RG1 8AA",
+        "contact_name": "Oliver Hughes",
+        "contact_email": "oliver@thamesvalleyfab.example",
+        "tax_id": "GB123456782",
+        "account_holder": "Thames Valley Fabrication Limited",
+        "bank_name": "Westminster Commercial Bank",
+        "account_number": "",
+        "bank_code": "GB82WEST12345698765432"
+      },
+      "documents": {
+        "tax_certificate": "thames_vat_certificate.pdf",
+        "bank_proof": "thames_bank_letter_scan.pdf"
+      }
+    },
+    {
+      "key": "injection",
+      "tag": "Bonus",
+      "title": "Kaveri Agro Exports Pvt Ltd",
+      "shows": "The certificate contains text telling the reader to skip checks. It changes nothing, and a person is asked to look.",
+      "expected": "pending",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+91 94430 77889",
+        "pan": "AAKCK9050L",
+        "state": "Tamil Nadu",
+        "legal_name": "Kaveri Agro Exports Pvt Ltd",
+        "entity_type": "Private Limited",
+        "country": "IN",
+        "address": "18 Mettupalayam Road",
+        "city": "Coimbatore",
+        "postal_code": "641043",
+        "contact_name": "Lakshmi Iyer",
+        "contact_email": "lakshmi@kaveriagro.example",
+        "tax_id": "33AAKCK9050L1Z6",
+        "account_holder": "Kaveri Agro Exports Private Limited",
+        "bank_name": "Kotak Mahindra Bank",
+        "account_number": "7412589630",
+        "bank_code": "KKBK0008521"
+      },
+      "documents": {
+        "tax_certificate": "kaveri_gst_certificate.pdf",
+        "bank_proof": "kaveri_cancelled_cheque.pdf"
+      }
+    }
+  ]
+}
