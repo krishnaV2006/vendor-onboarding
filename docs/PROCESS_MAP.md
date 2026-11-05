@@ -39,7 +39,7 @@
 3. **The vendor isn't told about fraud signals.** Block and Review reasons stay internal, and the AI never sees them, so it can't leak them. The vendor gets a neutral message.
 4. **Requests are exact.** The vendor's to-do list comes straight from the rules, word for word. AI only writes the opening.
 5. **Legitimate variations pass.** "Pvt Ltd" matches "PRIVATE LIMITED", and a sole proprietor's personal account is fine if it's the named owner's. False alarms cost as much trust as misses.
-6. **Failure is safe.** If one AI model is busy, the next takes over. If all of them fail, a text parser reads text PDFs and the run says so. If nothing can read a document, it goes to a person. A vendor is never approved on an unread document.
+6. **Failure is safe.** If one AI model is busy or slow, the next starts as well and the first good answer wins. If all of them fail, a text parser reads text PDFs and the run says so. If nothing can read a document, it goes to a person. A vendor is never approved on an unread document.
 7. **People can overrule, on the record.** A reviewer can approve or reject any case, but must give a reason, and it's logged.
 
 ## The vendor loop

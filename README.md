@@ -33,7 +33,7 @@ The tests run every prepared case through the real API. They use the backup pars
 | Backend | Python, FastAPI | One small service, easy to host |
 | Storage | SQLite | Enough for a demo. Cases, attempts, events and audit trail live in one file |
 | Live view | Server-sent events, with a slow poll as backup | Shows each stage as it happens, even on hosts that buffer streams |
-| Document reading | Gemini's free tier, with structured output. Claude is available as a switch | Reads scans and messy layouts, and can only fill in fixed fields. If a free model is busy, the next one takes over |
+| Document reading | Gemini's free tier, with structured output. Claude is available as a switch | Reads scans and messy layouts, and can only fill in fixed fields. If a free model is busy or slow, the next one starts as well and the first good answer wins |
 | Decision | Plain Python rules in `app/checks.py` | Predictable, testable and explainable |
 | Screens | Plain HTML, CSS and JavaScript | No build step |
 

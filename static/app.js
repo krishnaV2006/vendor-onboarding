@@ -8,7 +8,13 @@ const state = { meta: null, health: null, cleanups: [] };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 async function api(path, options) {
-  const response = await fetch(path, options);
+  let response;
+  try {
+    response = await fetch(path, options);
+  } catch (err) {
+    if (options?.method && options.method !== "GET") throw err;
+    response = await fetch(path, options);  // a host can drop an idle connection, and a read is safe to repeat
+  }
   if (!response.ok) {
     let detail = response.statusText;
     try { detail = (await response.json()).detail || detail; } catch { /* keep the status text */ }

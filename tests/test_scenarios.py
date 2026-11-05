@@ -320,6 +320,19 @@ def test_a_slow_gemini_model_hands_over_to_the_next(monkeypatch):
     assert time.monotonic() - started < 2.5
 
 
+def test_a_model_thats_slow_but_not_failing_brings_in_the_next_and_the_first_answer_wins(monkeypatch):
+    from app import documents
+    first, second = documents.GEMINI_MODELS[:2]
+    use_gemini(monkeypatch, {first: "slow"})
+    monkeypatch.setattr(documents, "GEMINI_HEDGE_SECONDS", 0.2)
+    data = (Path("samples") / "thames_bank_letter_scan.pdf").read_bytes()
+    started = time.monotonic()
+    result = documents.read_document(data, "application/pdf")
+    assert (result.reader, result.model, result.error) == ("gemini", second, None)
+    assert time.monotonic() - started < 2.5
+    assert models_tried() == [first, second]
+
+
 def test_a_rejected_key_stops_at_the_first_model(monkeypatch):
     from app import documents
     use_gemini(monkeypatch, {m: "bad_key" for m in documents.GEMINI_MODELS})

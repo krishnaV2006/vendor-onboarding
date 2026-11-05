@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Callable, Literal
 
 import httpx
@@ -21,9 +22,10 @@ log = logging.getLogger(__name__)
 
 CLAUDE_MODEL = os.getenv("VENDOR_CLAUDE_MODEL", "claude-opus-5-5")
 READ_TIMEOUT_SECONDS = float(os.getenv("VENDOR_AI_TIMEOUT", "45"))
-# Tried in order. Free models are often busy, so a slow or full one hands over to the next.
-GEMINI_MODELS = [m.strip() for m in os.getenv("VENDOR_GEMINI_MODELS", "gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite").split(",") if m.strip()]
+# Tried in order. Free models are often busy, so a slow or full one brings in the next.
+GEMINI_MODELS = [m.strip() for m in os.getenv("VENDOR_GEMINI_MODELS", "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.6-flash").split(",") if m.strip()]
 GEMINI_ATTEMPT_SECONDS = float(os.getenv("VENDOR_GEMINI_ATTEMPT_TIMEOUT", "20"))
+GEMINI_HEDGE_SECONDS = float(os.getenv("VENDOR_GEMINI_HEDGE_SECONDS", "5"))
 AI_NAMES = {"gemini": "Gemini", "claude": "Claude"}
 
 DocType = Literal["gst_certificate", "w9", "vat_certificate", "cancelled_cheque", "bank_letter",
@@ -53,6 +55,10 @@ class ReadResult(BaseModel):
 
 class AIUnavailable(Exception):
     """The AI gave no usable answer. The message is safe to show on a case."""
+
+
+class KeyRejected(AIUnavailable):
+    """The service refused the request itself, so trying another model won't help."""
 
 
 SYSTEM_PROMPT = """You read documents submitted by vendors during supplier onboarding and copy \
@@ -137,15 +143,19 @@ def _gemini_client(api_key: str, base_url: str | None):
 
 
 def _gemini_generate(contents: list, parse: Callable, timeout: float, **config) -> tuple:
-    """Tries each model in turn and returns the parsed answer and the model that gave it."""
+    """Returns the first good answer and the model that gave it.
+
+    Free models swing between instant and unavailable, so if one fails or is slow to answer,
+    the next one starts as well, rather than waiting for the slow one to time out.
+    """
     from google.genai import errors as genai_errors
     from google.genai import types as genai_types
     client = _gemini_client(os.environ["GEMINI_API_KEY"], os.getenv("VENDOR_GEMINI_BASE_URL"))
-    # Handing over to the next model is the retry, so the library shouldn't retry on its own as well.
+    # Starting the next model is the retry, so the library shouldn't retry on its own as well.
     http_options = genai_types.HttpOptions(timeout=int(timeout * 1000), retry_options=genai_types.HttpRetryOptions(attempts=1))
     settings = genai_types.GenerateContentConfig(http_options=http_options, **config)
-    problem = "No AI model is configured."
-    for model in GEMINI_MODELS:
+
+    def attempt(model: str) -> tuple:
         try:
             text = client.models.generate_content(model=model, contents=contents, config=settings).text
             if text:
@@ -153,7 +163,7 @@ def _gemini_generate(contents: list, parse: Callable, timeout: float, **config) 
             problem = "The AI service returned an empty answer."
         except genai_errors.APIError as exc:
             if exc.code in (400, 401, 403):  # every model would say the same, so stop here
-                raise AIUnavailable("The AI service rejected the request or the API key.") from exc
+                raise KeyRejected("The AI service rejected the request or the API key.") from exc
             problem = "The AI service is rate limiting requests." if exc.code == 429 else f"The AI service returned an error ({exc.code})."
         except httpx.TimeoutException:
             problem = "The AI service took too long to answer."
@@ -161,8 +171,28 @@ def _gemini_generate(contents: list, parse: Callable, timeout: float, **config) 
             problem = "Couldn't reach the AI service."
         except ValueError as exc:
             problem = f"The AI response couldn't be used: {exc}"
-        log.warning("%s failed, trying the next model: %s", model, problem)
-    raise AIUnavailable(problem)
+        log.warning("%s gave no answer: %s", model, problem)
+        raise AIUnavailable(problem)
+
+    pool = ThreadPoolExecutor(max_workers=max(len(GEMINI_MODELS), 1))
+    unstarted, running, problem = iter(GEMINI_MODELS), set(), "No AI model is configured."
+    try:
+        while True:
+            model = next(unstarted, None)
+            if model:
+                running.add(pool.submit(attempt, model))
+            if not running:
+                raise AIUnavailable(problem)
+            finished, running = wait(running, timeout=GEMINI_HEDGE_SECONDS, return_when=FIRST_COMPLETED)
+            for future in finished:
+                try:
+                    return future.result()
+                except KeyRejected:
+                    raise
+                except AIUnavailable as exc:
+                    problem = str(exc)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _content_block(data: bytes, media_type: str) -> dict:

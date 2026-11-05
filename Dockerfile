@@ -7,4 +7,4 @@ COPY static static
 COPY samples samples
 COPY seed seed
 ENV PYTHONUNBUFFERED=1
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75"]
