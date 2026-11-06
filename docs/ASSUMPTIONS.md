@@ -7,7 +7,8 @@ The guide says to treat ambiguity as part of the exercise: make an assumption, n
 | Countries | India, US and UK only | Enough to show that the rules change by country | Add countries as data in the rule tables |
 | Required documents | One tax document and one bank document | Covers the fraud and compliance risks the brief names | Add insurance, registration or NDAs by vendor category |
 | Bank letter age | Must be dated within 180 days | Common practice, but my choice | Procurement's own policy |
-| Shared bank account | Rejected and escalated, even though a reviewer can overturn it | It's the strongest payment-fraud signal, and a false alarm costs one reviewer's time | Could allow known group companies |
+| Shared bank account | Rejected and escalated, even though a reviewer can overturn it. The exception is an Indian GSTIN with the same PAN as the vendor on file: that's the same company registered in another state, so it's only a note | It's the strongest payment-fraud signal, and a false alarm costs one reviewer's time | Could allow known group companies, and add the new GSTIN to the existing vendor |
+| Close match on who owns the account | Goes to a person, while a close match on the tax document's name is only a note | Payment fraud often uses a name that's nearly right. UK banks handle a close Confirmation of Payee match the same way | A bank account verification service |
 | Restricted parties | A small made-up list | Shows the check without needing a paid data feed | OFAC, UN and EU sanctions feeds |
 | Vendor master | A seeded table standing in for the ERP | No real system to connect to | Live lookup in the ERP |
 | Tax IDs | Checked for format, checksum and consistency, not against government registers | Registers need paid or restricted API access | GST, IRS TIN Match and HMRC VAT lookups |

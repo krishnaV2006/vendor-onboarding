@@ -38,7 +38,7 @@
 2. **All problems are reported at once.** Every stage runs even after a failure, so the vendor is asked once, not five times.
 3. **The vendor isn't told about fraud signals.** Block and Review reasons stay internal, and the AI never sees them, so it can't leak them. The vendor gets a neutral message.
 4. **Requests are exact.** The vendor's to-do list comes straight from the rules, word for word. AI only writes the opening.
-5. **Legitimate variations pass.** "Pvt Ltd" matches "PRIVATE LIMITED", and a sole proprietor's personal account is fine if it's the named owner's. False alarms cost as much trust as misses.
+5. **Legitimate variations pass.** "Pvt Ltd" and "(P) Ltd" match "PRIVATE LIMITED", "Engg" matches "Engineering", "SBI" matches an SBIN IFSC, and a sole proprietor's personal account is fine if it's the named owner's. A company's second-state GSTIN isn't a stranger sharing its bank account. But an extra word, as in "Tata Steel UK Limited", is a different company, not a typo. False alarms cost as much trust as misses.
 6. **Failure is safe.** If one AI model is busy or slow, the next starts as well and the first good answer wins. If all of them fail, a text parser reads text PDFs and the run says so. If nothing can read a document, it goes to a person. A vendor is never approved on an unread document.
 7. **People can overrule, on the record.** A reviewer can approve or reject any case, but must give a reason, and it's logged.
 
