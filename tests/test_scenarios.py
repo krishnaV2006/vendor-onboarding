@@ -1,12 +1,9 @@
 """Runs every prepared case end to end through the real API, using the backup reader (no AI)."""
 import json
 import os
-import tempfile
 import time
 from pathlib import Path
 
-os.environ["VENDOR_DB"] = str(Path(tempfile.mkdtemp()) / "test.db")
-os.environ["VENDOR_MIN_STAGE_MS"] = "0"
 os.environ.pop("ANTHROPIC_API_KEY", None)
 os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
 
@@ -16,11 +13,12 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
+client.post("/api/reviewer/login", json={"passcode": "test-passcode"})
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
-    client.post("/api/reset")
+    assert client.post("/api/reset").status_code == 200
 
 
 def wait_for(run_id: int) -> dict:
@@ -91,7 +89,7 @@ def test_wrong_documents_then_fix_is_approved():
     started = start("wrong_docs")
     run = wait_for(started["run_id"])
     assert run["status"] == "pending"
-    assert {"tax_doc_type", "bank_doc_present"} <= failing_ids(run, "fix")
+    assert "tax_doc_type" in failing_ids(run, "fix")
     again = client.post(f"/api/cases/{started['case_id']}/resubmit-sample").json()
     second = wait_for(again["run_id"])
     assert second["status"] == "approved", second["decision"]
@@ -208,11 +206,13 @@ def test_broken_reader_leaves_the_case_with_a_person(monkeypatch):
     assert client.get(f"/api/cases/{started['case_id']}").json()["case"]["waiting_on"] == "internal"
 
 
-def test_blank_upload_runs_and_asks_for_everything():
+def test_blank_form_is_refused_before_anything_runs():
+    before = client.get("/api/stats").json()["total"]
     response = client.post("/api/submissions", data={"fields": json.dumps({"country": "IN"})})
-    run = wait_for(response.json()["run_id"])
-    assert run["status"] == "pending" and run["waiting_on"] == "vendor"
-    assert {"fields_present", "tax_doc_present", "bank_doc_present"} <= failing_ids(run, "fix")
+    assert response.status_code == 422
+    errors = response.json()["detail"]["errors"]
+    assert {"legal_name", "tax_id", "pan", "bank_code", "tax_certificate", "bank_proof"} <= set(errors)
+    assert client.get("/api/stats").json()["total"] == before
 
 
 def test_non_document_upload_is_refused():

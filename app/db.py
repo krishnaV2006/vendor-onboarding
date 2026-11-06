@@ -1,6 +1,7 @@
 """SQLite storage: cases, runs, the live event log, documents and the audit trail."""
 import json
 import os
+import secrets
 import shutil
 import sqlite3
 import uuid
@@ -15,7 +16,8 @@ HISTORY_PATH = ROOT / "seed" / "demo_history.db"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cases (
     id TEXT PRIMARY KEY, vendor_name TEXT, country TEXT, status TEXT, waiting_on TEXT,
-    version INTEGER, scenario TEXT, created_at TEXT, updated_at TEXT, message_override TEXT
+    version INTEGER, scenario TEXT, created_at TEXT, updated_at TEXT, message_override TEXT,
+    vendor_token TEXT
 );
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, case_id TEXT, version INTEGER, state TEXT, status TEXT,
@@ -78,6 +80,8 @@ def init(reset: bool = False) -> None:
             for table in ("cases", "runs", "events", "documents", "vendors", "watchlist", "audit"):
                 conn.execute(f"DROP TABLE IF EXISTS {table}")
         conn.executescript(SCHEMA)
+        if "vendor_token" not in {row["name"] for row in conn.execute("PRAGMA table_info(cases)")}:
+            conn.execute("ALTER TABLE cases ADD COLUMN vendor_token TEXT")  # databases recorded before private vendor links
         if not conn.execute("SELECT 1 FROM vendors LIMIT 1").fetchone():
             conn.executemany("INSERT INTO vendors (name, tax_id, bank_account, case_id) VALUES (?,?,?,NULL)", SEED_VENDORS)
         if not conn.execute("SELECT 1 FROM watchlist LIMIT 1").fetchone():
@@ -96,12 +100,15 @@ def _decode(row: sqlite3.Row | None, *json_fields: str) -> dict | None:
 RUN_JSON = ("submission", "reads", "checks", "decision", "message")
 
 
-def create_case(vendor_name: str, country: str, scenario: str | None) -> str:
+def create_case(vendor_name: str, country: str, scenario: str | None) -> tuple[str, str]:
+    """Returns the case ID and the vendor's private token, which their status link carries."""
     case_id = "VND-" + uuid.uuid4().hex[:6].upper()
+    token = secrets.token_urlsafe(18)
     with connect() as conn:
-        conn.execute("INSERT INTO cases VALUES (?,?,?,?,?,?,?,?,?,NULL)",
-                     (case_id, vendor_name, country, "running", None, 0, scenario, now(), now()))
-    return case_id
+        conn.execute("""INSERT INTO cases (id, vendor_name, country, status, waiting_on, version, scenario, created_at, updated_at, vendor_token)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (case_id, vendor_name, country, "running", None, 0, scenario, now(), now(), token))
+    return case_id, token
 
 
 def create_run(case_id: str, submission: dict) -> tuple[int, int]:

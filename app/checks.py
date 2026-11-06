@@ -315,7 +315,7 @@ def _holder_check(sub: dict) -> Check:
     if relation == names.OTHER_ENTITY:
         return _fix("bank_holder", name, f'"{holder}" has the same name as "{legal}" but a different legal form, so it may be a different company.',
                     f'The bank account holder "{holder}" has a different legal form from "{legal}". Provide an account held by the exact company that is applying.')
-    return _fix("bank_holder", name, f'The account belongs to a different business ("{holder}"), not "{legal}".',
+    return _fix("bank_holder", name, f'The account is in a different name ("{holder}"), not "{legal}".',
                 f'The bank account belongs to "{holder}", not "{legal}". Provide an account in the company\'s name.')
 
 

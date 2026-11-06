@@ -165,11 +165,12 @@ def main():
         },
     })
 
-    # Edge 4: wrong document in the slot and one missing, in a different country's rule set.
+    # Edge 4: the wrong kind of document in the tax slot, in a different country's rule set.
+    # (A missing document can't happen any more: the form won't send without both.)
     scenarios.append({
         "key": "wrong_docs", "tag": "Edge case 4", "title": "Cedar Ridge Software LLC",
-        "shows": "US vendor uploads an invoice instead of a W-9 and no bank proof. The AI spots what the document really is.",
-        "expected": "pending", "fix_label": "Vendor uploads the W-9 and a bank letter",
+        "shows": "US vendor uploads an invoice where the W-9 should be. It has the right name and EIN, but the AI spots what the document really is.",
+        "expected": "pending", "fix_label": "Vendor uploads the signed W-9",
         "submission": base(legal_name="Cedar Ridge Software LLC", entity_type="LLC", country="US", state="California",
                            address="1200 Market Street, Suite 400", city="San Francisco", postal_code="94102", contact_name="Dana Whitfield",
                            contact_email="dana@cedarridge.example", contact_phone="+1 415 555 0142", tax_id="84-1234567",
@@ -177,13 +178,13 @@ def main():
         "documents": {
             "tax_certificate": pdf("cedar_invoice.pdf", "CEDAR RIDGE SOFTWARE LLC", "INVOICE",
                                    ["Invoice No: CR-2291", "Date: 2026-09-30", "Bill To: Lakeshore Office Supply LLC", "Description: Annual licence", "Total: USD 12,400.00"]),
+            "bank_proof": bank_letter("cedar_bank_letter.pdf", "JPMorgan Chase", "Cedar Ridge Software LLC", "483920175566", "021000021", "ABA Routing Number"),
         },
         "fix": {
             "documents": {
                 "tax_certificate": pdf("cedar_w9.pdf", "INTERNAL REVENUE SERVICE", "FORM W-9",
                                        ["Request for Taxpayer Identification Number and Certification", "Name: Cedar Ridge Software LLC", "Address: 1200 Market Street, Suite 400, San Francisco, CA 94102",
                                         "Employer Identification Number: 84-1234567", "Date: 2026-10-01", "Signature: Dana Whitfield"]),
-                "bank_proof": bank_letter("cedar_bank_letter.pdf", "JPMorgan Chase", "Cedar Ridge Software LLC", "483920175566", "021000021", "ABA Routing Number"),
             },
         },
     })

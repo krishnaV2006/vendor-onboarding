@@ -147,9 +147,9 @@
       "key": "wrong_docs",
       "tag": "Edge case 4",
       "title": "Cedar Ridge Software LLC",
-      "shows": "US vendor uploads an invoice instead of a W-9 and no bank proof. The AI spots what the document really is.",
+      "shows": "US vendor uploads an invoice where the W-9 should be. It has the right name and EIN, but the AI spots what the document really is.",
       "expected": "pending",
-      "fix_label": "Vendor uploads the W-9 and a bank letter",
+      "fix_label": "Vendor uploads the signed W-9",
       "submission": {
         "trade_name": "",
         "owner_name": "",
@@ -171,12 +171,12 @@
         "bank_code": "021000021"
       },
       "documents": {
-        "tax_certificate": "cedar_invoice.pdf"
+        "tax_certificate": "cedar_invoice.pdf",
+        "bank_proof": "cedar_bank_letter.pdf"
       },
       "fix": {
         "documents": {
-          "tax_certificate": "cedar_w9.pdf",
-          "bank_proof": "cedar_bank_letter.pdf"
+          "tax_certificate": "cedar_w9.pdf"
         }
       }
     },
