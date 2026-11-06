@@ -162,12 +162,18 @@ def _fields(read: dict | None) -> dict | None:
     return read.get("fields") if read else None
 
 
-def _name_relation_check(cid, name, expected, found, source) -> Check:
+CLOSE_PAYEE = ("A close match on who owns an account goes to a person, as with a close match in the UK's "
+               "Confirmation of Payee check, because payment fraud often uses a name that's nearly right.")
+
+
+def _name_relation_check(cid, name, expected, found, source, payee=False) -> Check:
     relation = names.compare(expected, found)
     if relation == names.SAME:
         same_text = f'"{expected}" matches "{found}" on the {source}.'
         return Check(cid, name, PASS, same_text)
     if relation == names.CLOSE:
+        if payee:
+            return Check(cid, name, REVIEW, f'"{expected}" nearly matches "{found}" on the {source}, but not exactly. {CLOSE_PAYEE}')
         return Check(cid, name, NOTE, f'"{expected}" nearly matches "{found}" on the {source}, probably a typo.')
     return _fix(cid, name, f'The form says "{expected}" but the {source} says "{found}".',
                 f'Your form says "{expected}" but your {source} says "{found}". Correct the form or upload the right document.')
@@ -256,7 +262,7 @@ def cross_checks(sub: dict, reads: dict, today: date | None = None) -> list[Chec
         else:
             checks.append(Check("bank_doc_type", "Right bank document", PASS, f"This is {DOC_TYPE_NAMES[bank_fields['doc_type']]}."))
             if bank_fields.get("account_holder"):
-                checks.append(_name_relation_check("bank_doc_holder", "Holder on bank document", sub.get("account_holder"), bank_fields["account_holder"], "bank document"))
+                checks.append(_name_relation_check("bank_doc_holder", "Holder on bank document", sub.get("account_holder"), bank_fields["account_holder"], "bank document", payee=True))
             else:
                 checks.append(Check("bank_doc_holder", "Holder on bank document", REVIEW, "The account holder couldn't be found on this document."))
             form_account = sub.get("bank_code") if country == "GB" else sub.get("account_number")
@@ -284,12 +290,16 @@ def _holder_check(sub: dict) -> Check:
         return Check("bank_holder", name, NOTE, "Skipped because a name is missing.")
     relation = names.compare(legal, holder)
     owner = sub.get("owner_name")
-    if sub.get("entity_type") == "Sole proprietor" and not _is_blank(owner) and names.compare(owner, holder) in (names.SAME, names.CLOSE):
-        return Check("bank_holder", name, PASS, f'The account is in the owner\'s name ("{holder}"), which is normal for a sole proprietor.')
+    if sub.get("entity_type") == "Sole proprietor" and not _is_blank(owner):
+        owner_relation = names.compare(owner, holder)
+        if owner_relation == names.SAME:
+            return Check("bank_holder", name, PASS, f'The account is in the owner\'s name ("{holder}"), which is normal for a sole proprietor.')
+        if owner_relation == names.CLOSE:
+            return Check("bank_holder", name, REVIEW, f'The account is in the name "{holder}", which nearly matches the owner "{owner}", but not exactly. {CLOSE_PAYEE}')
     if relation == names.SAME:
         return Check("bank_holder", name, PASS, f'"{holder}" is the same company as "{legal}", once abbreviations are expanded.')
     if relation == names.CLOSE:
-        return Check("bank_holder", name, NOTE, f'"{holder}" nearly matches "{legal}", probably a typo.')
+        return Check("bank_holder", name, REVIEW, f'"{holder}" nearly matches "{legal}", but not exactly. {CLOSE_PAYEE}')
     if relation == names.PERSON:
         return _fix("bank_holder", name, f'The account is in what looks like a person\'s name ("{holder}"), not "{legal}". Paying a company into a personal account is a common fraud pattern.',
                     f'The bank account is in the name "{holder}", not "{legal}". Provide an account in the company\'s name, with a bank letter or cancelled cheque showing it.')

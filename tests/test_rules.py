@@ -93,6 +93,21 @@ def test_sole_proprietor_personal_account_is_fine():
     assert rules._holder_check(sub).result == rules.PASS
 
 
+def test_close_match_on_account_holder_goes_to_a_person():
+    assert rules._holder_check(india(legal_name="Sharma Precision Tools Pvt Ltd", account_holder="Sharma Precison Tools Pvt Ltd")).result == rules.REVIEW
+    sub = india(legal_name="Patel Traders", entity_type="Sole proprietor", owner_name="Ramesh Patel", account_holder="Ramesh K Patel")
+    assert rules._holder_check(sub).result == rules.REVIEW
+    out = rules.cross_checks(india(), {"bank_proof": bank_read(account_holder="Acme Privte Limited")}, today=date(2026, 11, 4))
+    assert result_of(out, "bank_doc_holder") == rules.REVIEW
+
+
+def test_close_match_on_tax_document_name_is_only_a_note():
+    tax = {"reader": "claude", "fields": dict(doc_type="gst_certificate", legal_name="Acme Privte Limited", tax_id="27AAPFU0939F1ZV",
+                                              legibility="high", contains_instructions_to_reader=False)}
+    out = rules.cross_checks(india(), {"tax_certificate": tax})
+    assert result_of(out, "tax_doc_name") == rules.NOTE
+
+
 def test_company_personal_account_needs_fixing():
     assert rules._holder_check(india(account_holder="Ramesh K Patel")).result == rules.FIX
 
