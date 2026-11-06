@@ -730,7 +730,20 @@ async function route() {
 }
 
 async function start() {
-  [state.meta, state.health] = await Promise.all([api("/api/meta"), api("/api/health")]);
+  // A free host can still be waking up, or restarting, when the page loads. Keep trying for about two minutes.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      [state.meta, state.health] = await Promise.all([api("/api/meta"), api("/api/health")]);
+      break;
+    } catch (err) {
+      if (attempt >= 24) {
+        view.innerHTML = `<div class="empty"><p>The demo host isn't answering (${esc(err.message)}).</p><p style="margin-top:10px"><a href="">Reload the page</a></p></div>`;
+        return;
+      }
+      view.innerHTML = `<div class="empty" role="status"><p>The demo host is waking up. This can take about a minute.</p><p class="small muted" style="margin-top:8px">Trying again automatically (attempt ${attempt}).</p></div>`;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
   document.getElementById("ai-status").innerHTML = state.health.ai_configured
     ? `<span class="badge ai">AI reading on: ${esc(state.health.ai_name)}</span>`
     : `<span class="badge warn">AI off: backup parser only</span>`;
