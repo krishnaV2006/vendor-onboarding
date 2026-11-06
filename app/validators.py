@@ -22,10 +22,11 @@ PAN_HOLDER_TYPES = {
 }
 
 # First four letters of an IFSC identify the bank.
+# The first IFSC letters name the bank. Each bank goes by its full name or a common short form.
 IFSC_BANKS = {
-    "HDFC": "HDFC", "ICIC": "ICICI", "SBIN": "STATE BANK", "UTIB": "AXIS", "KKBK": "KOTAK",
-    "PUNB": "PUNJAB NATIONAL", "BARB": "BANK OF BARODA", "YESB": "YES", "CNRB": "CANARA",
-    "IDFB": "IDFC",
+    "HDFC": ("HDFC",), "ICIC": ("ICICI",), "SBIN": ("STATE BANK", "SBI"), "UTIB": ("AXIS", "UTI BANK"),
+    "KKBK": ("KOTAK",), "PUNB": ("PUNJAB NATIONAL", "PNB"), "BARB": ("BANK OF BARODA", "BOB"),
+    "YESB": ("YES",), "CNRB": ("CANARA",), "IDFB": ("IDFC",),
 }
 
 EIN_INVALID_PREFIXES = {"00", "07", "08", "09", "17", "18", "19", "28", "29", "49", "69", "70",

@@ -37,9 +37,44 @@ def test_wrong_country_tax_id_is_named():
     ("Bluepeak Logistics Pvt Ltd", "Ramesh K Patel", names.PERSON),
     ("Bluepeak Logistics Pvt Ltd", "Orion Traders Pvt Ltd", names.DIFFERENT),
     ("Sharma Precision Tools Pvt Ltd", "Sharma Precison Tools Private Limited", names.CLOSE),
+    # Ordinary variants that banks and registries use, which must not look like a different business.
+    ("Laxmi Engg Works (P) Ltd", "LAXMI ENGINEERING WORKS PRIVATE LIMITED", names.SAME),
+    ("Sharma Precision Tools Pvt Ltd", "SHARMA PRECISION TOOLS P LTD", names.SAME),
+    ("Laxmi Engg Works", "LAKSHMI ENGINEERING WORKS", names.SAME),
+    ("Mohd Rafiq Traders", "Mohammed Rafiq Traders", names.SAME),
+    ("Shree Ganesh Enterprises", "Sri Ganesh Enterprises", names.SAME),
+    ("Nandi Components LLP", "NANDI COMPONENTS LIMITED LIABILITY PARTNERSHIP", names.SAME),
+    ("Greenfield Chemicals PLC", "Greenfield Chemicals Public Limited Company", names.SAME),
+    ("A.B.C. Industries Pvt Ltd", "ABC Industries Private Limited", names.SAME),
+    ("Kumar Bros", "Kumar Brothers", names.SAME),
+    ("Bluepeak Logistics Pvt Ltd", "Blue Peak Logistics Private Limited", names.SAME),
+    ("Ramesh Patel", "Ramesh K Patel", names.CLOSE),
+    # A whole extra or different word is never a typo.
+    ("Tata Steel Limited", "Tata Steel UK Limited", names.DIFFERENT),
+    ("Tata Steel UK Limited", "Tata Steel US Limited", names.DIFFERENT),
+    ("R Patel", "S Patel", names.PERSON),
 ])
 def test_name_comparison(a, b, expected):
     assert names.compare(a, b) == expected
+
+
+def test_business_names_dont_look_like_people():
+    assert not names.looks_like_person("Laxmi Engg Works")
+    assert names.looks_like_person("Ramesh K Patel")
+
+
+def test_dotted_initials_match_on_the_watchlist():
+    out = rules.risk(india(legal_name="SIS DOO"), [], [{"name": "SIS d.o.o.", "reason": "test"}])
+    assert result_of(out, "watchlist") == rules.BLOCK
+
+
+@pytest.mark.parametrize("bank_name,code", [
+    ("SBI", "SBIN0001234"), ("State Bank of India", "SBIN0001234"), ("S.B.I.", "SBIN0001234"),
+    ("PNB", "PUNB0012300"), ("BOB", "BARB0VJAND1"), ("HDFC Bank Ltd", "HDFC0001234"),
+])
+def test_short_bank_names_match_their_ifsc(bank_name, code):
+    out = rules.cross_checks(india(bank_name=bank_name, bank_code=code), {})
+    assert not [c for c in out if c.id == "ifsc_bank"]
 
 
 def india(**changes):

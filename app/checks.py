@@ -3,6 +3,7 @@
 Every stage runs even if an earlier one failed, so a vendor gets all their problems
 in one message rather than one at a time.
 """
+import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
 
@@ -210,8 +211,10 @@ def cross_checks(sub: dict, reads: dict, today: date | None = None) -> list[Chec
         elif expected:
             checks.append(Check("pan_entity", "PAN and entity type agree", PASS, f"This PAN belongs to {v.PAN_HOLDER_TYPES[holder_type]}."))
     if country == "IN" and not _is_blank(sub.get("bank_code")) and not _is_blank(sub.get("bank_name")):
-        expected_bank = v.IFSC_BANKS.get(v.clean(sub["bank_code"])[:4])
-        if expected_bank and expected_bank not in sub["bank_name"].upper():
+        bank_names = v.IFSC_BANKS.get(v.clean(sub["bank_code"])[:4])
+        expected_bank = bank_names[0] if bank_names else None
+        given = names.normalize(sub["bank_name"])
+        if bank_names and not any(re.search(rf"\b{re.escape(n)}\b", given) for n in bank_names):
             checks.append(_fix("ifsc_bank", "IFSC and bank name agree",
                                f"IFSC {sub['bank_code']} belongs to {expected_bank}, but the form says {sub['bank_name']}.",
                                f"Your IFSC belongs to {expected_bank}, but you named {sub['bank_name']} as your bank. Correct whichever is wrong."))
