@@ -23,8 +23,9 @@ def clean_database():
 
 def wait_for(run_id: int) -> dict:
     for _ in range(200):
-        run = client.get(f"/api/runs/{run_id}").json()["run"]
-        if run["state"] != "running":
+        body = client.get(f"/api/runs/{run_id}").json()
+        run = body["run"]
+        if run["state"] != "running" and any(e["kind"] == "run_end" for e in body["events"]):  # the last write is done too
             return run
         time.sleep(0.05)
     raise AssertionError("Run didn't finish")
