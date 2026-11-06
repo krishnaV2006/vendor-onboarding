@@ -4,3 +4,5 @@ __pycache__/
 data/
 .env
 docs/DEMO_SCRIPT.md
+*.db-shm
+*.db-wal
