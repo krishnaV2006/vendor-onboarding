@@ -260,6 +260,7 @@ def test_ai_only_ever_sees_what_the_vendor_may_see(monkeypatch):
     assert run["message"]["intro_source"] == "ai"
     prompts = [r["body"]["messages"][0]["content"] for r in Handler.requests if isinstance(r["body"]["messages"][0]["content"], str)]
     assert len(prompts) == 1 and "fraud" not in prompts[0].lower()
+    assert "bluepeak" not in prompts[0].lower() and "{VENDOR}" in prompts[0]  # the typed name never reaches the model
 
     Handler.requests.clear()
     run = wait_for(start("shared_bank")["run_id"])
@@ -363,6 +364,7 @@ def test_gemini_only_ever_sees_what_the_vendor_may_see(monkeypatch):
     assert (run["message"]["intro_source"], run["message"]["intro_by"]) == ("ai", "Gemini")
     prompts = [r["body"]["contents"][0]["parts"][0]["text"] for r in Handler.requests if "text" in r["body"]["contents"][0]["parts"][0]]
     assert len(prompts) == 1 and "fraud" not in prompts[0].lower()
+    assert "bluepeak" not in prompts[0].lower() and "{VENDOR}" in prompts[0]  # the typed name never reaches the model
 
     Handler.requests.clear()
     run = wait_for(start("shared_bank")["run_id"])

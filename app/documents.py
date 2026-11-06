@@ -309,17 +309,35 @@ def read_document(data: bytes, media_type: str) -> ReadResult:
     return ReadResult(reader="none", error=error)
 
 
+VENDOR_PLACEHOLDER = "{VENDOR}"
+# An opening that links somewhere, names an internal check, or makes a list isn't what was asked for.
+INTRO_NOT_ALLOWED = re.compile(r"https?://|www\.|@|fraud|sanction|restricted|watchlist|reject|block|^\s*(?:[-*•]|\d+[.)])\s", re.I | re.M)
+
+
+def _safe_intro(text: str | None, vendor_name: str) -> str | None:
+    """Puts the vendor's name into the AI's opening, or returns None so the template is used."""
+    text = (text or "").strip()
+    if not text or len(text) > 500 or INTRO_NOT_ALLOWED.search(text):
+        log.warning("Message opening didn't fit the rules, using the template.")
+        return None
+    return text.replace(VENDOR_PLACEHOLDER, vendor_name)
+
+
 def draft_intro(vendor_name: str, verified: list[str], needed: list[str]) -> str | None:
-    """A short friendly opening for the vendor's message. Only ever given vendor-fixable items."""
+    """A short friendly opening for the vendor's message. Only ever given vendor-fixable items.
+
+    The model never sees the company name the vendor typed, only a placeholder that is filled in
+    afterwards, so text typed into the form can't steer what the model writes."""
     if not ai_available():
         return None
-    prompt = (f"Write a 2-sentence opening for an email to {vendor_name}, who applied to become an "
-              f"approved vendor. Say briefly what checked out, and that a few things are needed to "
-              f"finish. Be warm and plain. Don't list the items, don't make promises about timing, "
-              f"and no greeting or sign-off.\n\nChecked out: {verified}\nStill needed: {needed}")
+    prompt = (f"Write a 2-sentence opening for an email to a company that applied to become an approved "
+              f"vendor. Refer to the company only as {VENDOR_PLACEHOLDER}, written exactly like that. "
+              f"Say briefly what checked out, and that a few things are needed to finish. Be warm and "
+              f"plain. Don't list the items, don't make promises about timing, and no greeting or "
+              f"sign-off.\n\nChecked out: {verified}\nStill needed: {needed}")
     if provider() == "gemini":
         try:
-            return _gemini_generate([prompt], parse=str.strip, timeout=10.0)[0]
+            return _safe_intro(_gemini_generate([prompt], parse=str.strip, timeout=10.0)[0], vendor_name)
         except AIUnavailable as exc:
             log.warning("Message opening failed, using the template: %s", exc)
             return None
@@ -331,7 +349,7 @@ def draft_intro(vendor_name: str, verified: list[str], needed: list[str]) -> str
         )
         if response.stop_reason == "refusal":
             return None
-        return next(b.text for b in response.content if b.type == "text").strip()
+        return _safe_intro(next(b.text for b in response.content if b.type == "text"), vendor_name)
     except (anthropic.APIError, StopIteration) as exc:
         log.warning("Message opening failed, using the template: %s", exc)
         return None

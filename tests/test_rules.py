@@ -216,3 +216,10 @@ def test_vendor_message_never_leaks_internal_reasons():
 def test_resubmission_flags_bank_change():
     out = rules.compare_versions({"account_number": "111"}, {"account_number": "222"})
     assert "Bank details changed" in out[0].detail
+
+
+def test_ai_opening_gets_the_name_afterwards_and_falls_back_when_off_script():
+    from app.documents import _safe_intro
+    assert _safe_intro("Thanks, {VENDOR}. Most of it checked out.", "Acme Pvt Ltd") == "Thanks, Acme Pvt Ltd. Most of it checked out."
+    for bad in ["Visit https://example.com to finish.", "We need:\n- a cheque\n- a letter", "Your application was rejected.", "", "x" * 600]:
+        assert _safe_intro(bad, "Acme Pvt Ltd") is None
