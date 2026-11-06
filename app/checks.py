@@ -313,20 +313,37 @@ def _bank_doc_age(fields: dict, today: date) -> list[Check]:
     return [Check("bank_doc_age", "Bank letter is recent", PASS, f"The letter is {age} days old.")]
 
 
+def _legal_entity(tax_id) -> str:
+    """Which legal entity a tax ID belongs to. One Indian company holds a GSTIN for each state it's
+    registered in, and every one of them contains the company's PAN, so for a GSTIN that's the PAN."""
+    value = v.clean(tax_id)
+    if len(value) == 15 and value[:2].isdigit() and v.pan_ok(value[2:12])[0]:
+        return value[2:12]
+    return value
+
+
 def risk(sub: dict, vendors: list[dict], watchlist: list[dict], case_id: str | None = None) -> list[Check]:
     checks = []
     others = [x for x in vendors if case_id is None or x.get("case_id") != case_id]
 
     bank_key = v.clean(sub.get("bank_code") if sub.get("country") == "GB" else sub.get("account_number"))
     tax_key = v.clean(sub.get("tax_id"))
+    entity = _legal_entity(tax_key)
     same_bank = [x for x in others if bank_key and v.clean(x["bank_account"]) == bank_key]
     same_tax = [x for x in others if tax_key and v.clean(x["tax_id"]) == tax_key]
 
-    unrelated_bank = [x for x in same_bank if v.clean(x["tax_id"]) != tax_key]
+    unrelated_bank = [x for x in same_bank if _legal_entity(x["tax_id"]) != entity]
+    other_state = [x for x in same_bank if _legal_entity(x["tax_id"]) == entity and v.clean(x["tax_id"]) != tax_key]
     if unrelated_bank:
         owner = unrelated_bank[0]["name"]
         checks.append(Check("bank_unique", "Bank account not used by another vendor", BLOCK,
                             f'This account is already on file for "{owner}", a different vendor with a different tax ID. Two companies sharing an account is a strong sign of payment diversion.'))
+    elif other_state:
+        existing = other_state[0]
+        checks.append(Check("bank_unique", "Bank account not used by another vendor", NOTE,
+                            f'This account is already on file for "{existing["name"]}" under GSTIN {existing["tax_id"]}, which contains the same PAN ({entity}). '
+                            "A company holds one GSTIN for each state, so this is the same company registering in another state, not a different vendor. "
+                            "Consider adding this GSTIN to the existing vendor rather than creating a second record."))
     else:
         checks.append(Check("bank_unique", "Bank account not used by another vendor", PASS, f"Checked against {len(others)} vendors on file."))
 

@@ -113,6 +113,20 @@ def test_shared_bank_account_is_blocked():
     assert result_of(out, "bank_unique") == rules.BLOCK
 
 
+def test_same_company_registering_another_state_isnt_payment_diversion():
+    # One PAN can hold a GSTIN in each state. The Maharashtra unit is on file; the Karnataka unit applies.
+    on_file = [{"name": "Acme Pvt Ltd", "tax_id": "27AAPFU0939F1ZV", "bank_account": "50100234567891", "case_id": None}]
+    out = rules.risk(india(tax_id="29AAPFU0939F1ZR", state="Karnataka"), on_file, WATCHLIST)
+    assert result_of(out, "bank_unique") == rules.NOTE
+    assert rules.decide(out)["status"] == "approved"
+
+
+def test_shared_account_with_a_different_pan_is_still_blocked():
+    on_file = [{"name": "Other Co Pvt Ltd", "tax_id": "29AABCO1234E1ZL", "bank_account": "50100234567891", "case_id": None}]
+    out = rules.risk(india(), on_file, WATCHLIST)
+    assert result_of(out, "bank_unique") == rules.BLOCK
+
+
 def test_existing_tax_id_goes_for_review():
     out = rules.risk(india(tax_id="27AABCO1234E1ZL"), VENDORS, WATCHLIST)
     assert result_of(out, "tax_unique") == rules.REVIEW
