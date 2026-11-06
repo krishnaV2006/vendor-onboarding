@@ -144,6 +144,14 @@ def test_account_on_document_must_match_form():
     assert result_of(out, "bank_doc_account") == rules.FIX
 
 
+def test_bank_code_on_document_must_match_form():
+    out = rules.cross_checks(india(bank_name="SBI", bank_code="SBIN0001234"), {"bank_proof": bank_read(bank_code="HDFC0001234")}, today=date(2026, 11, 4))
+    assert result_of(out, "bank_doc_code") == rules.FIX
+    assert not [c for c in out if c.id == "ifsc_bank"]  # "SBI" itself is fine for an SBIN code
+    out = rules.cross_checks(india(), {"bank_proof": bank_read(bank_code="HDFC0001234")}, today=date(2026, 11, 4))
+    assert result_of(out, "bank_doc_code") == rules.PASS
+
+
 def test_unreadable_document_goes_to_a_person_never_approved():
     out = rules.read_quality("Bank document", {"reader": "none", "error": "AI down"}, "bank_doc")
     assert rules.decide(out)["status"] == "pending" and rules.decide(out)["waiting_on"] == "internal"

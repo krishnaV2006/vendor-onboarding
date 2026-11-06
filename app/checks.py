@@ -275,6 +275,15 @@ def cross_checks(sub: dict, reads: dict, today: date | None = None) -> list[Chec
                                        "The account number on your form doesn't match your bank document. Correct the form or upload the right document."))
             else:
                 checks.append(Check("bank_doc_account", "Account on bank document", REVIEW, "The account number couldn't be found on this document."))
+            # A UK IBAN already carries the bank and was compared above as the account.
+            if country in ("IN", "US") and bank_fields.get("bank_code") and not _is_blank(sub.get("bank_code")):
+                code_label = COUNTRIES[country]["bank_code_label"]
+                if _digits_equal(bank_fields["bank_code"], sub.get("bank_code")):
+                    checks.append(Check("bank_doc_code", f"{code_label} on bank document", PASS, f"The document shows {bank_fields['bank_code']}, same as the form."))
+                else:
+                    checks.append(_fix("bank_doc_code", f"{code_label} on bank document",
+                                       f"The form says {sub.get('bank_code')} but the document says {bank_fields['bank_code']}.",
+                                       f"The {code_label} on your form ({sub.get('bank_code')}) doesn't match your bank document ({bank_fields['bank_code']}). Correct the form or upload the right document."))
             checks += _bank_doc_age(bank_fields, today)
 
     domain = (sub.get("contact_email") or "").rsplit("@", 1)[-1].lower()
