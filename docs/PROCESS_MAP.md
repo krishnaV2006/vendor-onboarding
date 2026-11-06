@@ -40,7 +40,9 @@
 4. **Requests are exact.** The vendor's to-do list comes straight from the rules, word for word. AI only writes the opening.
 5. **Legitimate variations pass.** "Pvt Ltd" and "(P) Ltd" match "PRIVATE LIMITED", "Engg" matches "Engineering", "SBI" matches an SBIN IFSC, and a sole proprietor's personal account is fine if it's the named owner's. A company's second-state GSTIN isn't a stranger sharing its bank account. But an extra word, as in "Tata Steel UK Limited", is a different company, not a typo. False alarms cost as much trust as misses.
 6. **Failure is safe.** If one AI model is busy or slow, the next starts as well and the first good answer wins. If all of them fail, a text parser reads text PDFs and the run says so. If nothing can read a document, it goes to a person. A vendor is never approved on an unread document.
-7. **People can overrule, on the record.** A reviewer can approve or reject any case, but must give a reason, and it's logged.
+7. **People can overrule, on the record.** A reviewer can approve or reject a case, but must give a reason, and it's logged. A case still waiting on the vendor can only be rejected.
+8. **Vendors and reviewers see different things.** A vendor gets a private link to their own application: its status, the message and a form to correct it. The dashboard, the checks, the documents and the approve and reject buttons need the reviewer passcode.
+9. **Bad formats never reach the process.** The form checks every answer as the vendor types, with the same rules the server enforces, and won't send until each one is in the right format. The process then checks whether the answers are true.
 
 ## The vendor loop
 
@@ -61,5 +63,5 @@ Each attempt is a new version of the same case. The case page shows every versio
 | Edge 1 | Bluepeak Logistics Pvt Ltd (India) | Bank account in a person's name | Pending, then approved after resubmitting |
 | Edge 2 | Nandi Components LLP (India) | GSTIN is valid, but its PAN and state code contradict the form | Pending |
 | Edge 3 | Apex Industrial Supplies (India) | Bank account already belongs to another vendor | Rejected, with a neutral message |
-| Edge 4 | Cedar Ridge Software LLC (US) | Wrong document uploaded, bank proof missing | Pending, then approved after resubmitting |
+| Edge 4 | Cedar Ridge Software LLC (US) | An invoice uploaded where the W-9 should be | Pending, then approved after resubmitting |
 | Bonus | Thames Valley Fabrication Ltd (UK) | Scanned bank letter that only AI can read | Approved with AI, sent to a person without it |

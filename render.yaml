@@ -8,5 +8,7 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      - key: REVIEWER_PASSCODE
+        sync: false
       - key: VENDOR_AI_PROVIDER
         value: gemini

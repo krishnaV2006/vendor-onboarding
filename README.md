@@ -12,7 +12,9 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.main:app --port 8010
 ```
 
-Then open http://localhost:8010.
+Then open http://localhost:8010. That's the vendor portal, where anyone can apply.
+
+The reviewer console (dashboard, every application, approve and reject, prepared cases) is at http://localhost:8010/#/review and needs the passcode in `REVIEWER_PASSCODE`. Set it in `.env`. With no passcode set, the console stays locked.
 
 To turn on AI reading, copy `.env.example` to `.env` and add a Gemini API key, which is free from Google AI Studio. Put keys only in `.env`, which git ignores, never in `.env.example`. Without a key, a backup text parser reads text PDFs and scanned documents go to a person.
 
@@ -41,14 +43,15 @@ The tests run every prepared case through the real API. They use the backup pars
 |---|---|
 | `app/pipeline.py` | Runs the seven stages and logs each step |
 | `app/checks.py` | The rulebook, the decision rule and the vendor messages |
-| `app/validators.py` | Tax ID and bank code formats and checksums |
+| `app/validators.py` | Tax ID, bank code, phone and postal code formats and checksums |
+| `app/intake.py` | What the form must get right before it can be sent |
 | `app/names.py` | Compares company and account-holder names |
 | `app/documents.py` | Reads documents with Gemini or Claude, or the backup parser |
 | `scripts/make_samples.py` | Generates the prepared cases and their PDFs |
 
 ## Host it
 
-`render.yaml` sets the app up on Render's free plan. Create a Blueprint from this repository and enter `GEMINI_API_KEY` when asked. The `Dockerfile` also runs on any other host that supports containers.
+`render.yaml` sets the app up on Render's free plan. Create a Blueprint from this repository and enter `GEMINI_API_KEY` and `REVIEWER_PASSCODE` when asked. The `Dockerfile` also runs on any other host that supports containers.
 
 The free plan sleeps after 15 minutes without traffic, takes about a minute to wake, and wipes its disk each time. To keep the dashboard useful, the app restores real runs recorded in `seed/demo_history.db` whenever its disk is empty. Run `scripts/make_demo_history.py` to record them again, which is required after any database schema change.
 

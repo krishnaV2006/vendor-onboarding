@@ -17,12 +17,14 @@ SNAPSHOT.parent.mkdir(exist_ok=True)
 for leftover in SNAPSHOT.parent.glob(f"{SNAPSHOT.name}*"):
     leftover.unlink()
 os.environ["VENDOR_DB"] = str(SNAPSHOT)
+os.environ.setdefault("REVIEWER_PASSCODE", "recording")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
+client.post("/api/reviewer/login", json={"passcode": os.environ["REVIEWER_PASSCODE"]})
 RESUBMIT = {"personal_account", "gstin_conflict"}  # the others stay open, so the dashboard shows every status
 
 
