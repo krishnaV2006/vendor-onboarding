@@ -89,16 +89,9 @@ function statusPill(status, waitingOn, large = false) {
   const cls = large ? " large" : "";
   if (status === "approved") return `<span class="pill approved${cls}">${icon("pass", size)}Approved</span>`;
   if (status === "rejected") return `<span class="pill rejected${cls}">${icon("block", size)}Rejected</span>`;
-  if (status === "pending" && waitingOn === "vendor") return `<span class="pill pending-vendor${cls}">${icon("clock", size)}Pending: waiting on vendor</span>`;
-  if (status === "pending") return `<span class="pill pending-internal${cls}">${icon("review", size)}Pending: our team to review</span>`;
+  if (status === "pending" && waitingOn === "vendor") return `<span class="pill pending-vendor${cls}">${icon("clock", size)}Waiting on vendor</span>`;
+  if (status === "pending") return `<span class="pill pending-internal${cls}">${icon("review", size)}Needs review</span>`;
   return `<span class="pill running${cls}">${icon("spinner", size)}Running</span>`;
-}
-
-function nextStep(c) {
-  if (c.status === "approved") return "Added to the vendor master";
-  if (c.status === "rejected") return "Escalated to procurement";
-  if (c.status === "running") return "Checks in progress";
-  return c.waiting_on === "vendor" ? "Vendor has been asked to resubmit" : "Reviewer needs to check it";
 }
 
 const COUNTRY_FLAGS = { IN: "India", US: "US", GB: "UK" };
@@ -133,13 +126,13 @@ const DOC_TYPE_LABELS = {
 };
 
 function readerBadge(read) {
-  if (read.reused) return `<span class="badge">Not replaced, reading kept from last attempt</span>`;
+  if (read.reused) return `<span class="badge">Kept from last attempt</span>`;
   if (read.reader === "gemini" || read.reader === "claude") {
     const name = read.reader === "gemini" ? "Gemini" : "Claude";
-    return `<span class="badge ai" title="${esc(read.model || "")}">Read by ${name} in ${seconds(read.ms)}</span>`;
+    return `<span class="badge" title="${esc(read.model || "")}">${name} · ${seconds(read.ms)}</span>`;
   }
-  if (read.reader === "text_parser") return `<span class="badge warn">Read by backup text parser</span>`;
-  return `<span class="badge warn">Couldn't be read</span>`;
+  if (read.reader === "text_parser") return `<span class="badge warn">Text parser</span>`;
+  return `<span class="badge warn">Unreadable</span>`;
 }
 
 function docFields(fields) {
@@ -153,82 +146,80 @@ function docFields(fields) {
 
 // ---------- dashboard ----------
 
-const TILES = [
-  { key: "all", label: "Applications", stat: "total", match: () => true },
-  { key: "approved", label: "Approved", stat: "approved", icon: "pass", cls: "ic-approved", match: (c) => c.status === "approved" },
-  { key: "vendor", label: "Waiting on vendor", stat: "pending_vendor", icon: "clock", cls: "ic-vendor", match: (c) => c.status === "pending" && c.waiting_on === "vendor" },
-  { key: "internal", label: "Our team to review", stat: "pending_internal", icon: "review", cls: "ic-internal", match: (c) => c.status === "pending" && c.waiting_on !== "vendor" },
-  { key: "rejected", label: "Rejected", stat: "rejected", icon: "block", cls: "ic-rejected", match: (c) => c.status === "rejected" },
+const FILTERS = [
+  { key: "all", label: "All", match: () => true },
+  { key: "vendor", label: "Waiting on vendor", match: (c) => c.status === "pending" && c.waiting_on === "vendor" },
+  { key: "internal", label: "Needs review", match: (c) => c.status === "pending" && c.waiting_on !== "vendor" },
+  { key: "approved", label: "Approved", match: (c) => c.status === "approved" },
+  { key: "rejected", label: "Rejected", match: (c) => c.status === "rejected" },
+  { key: "running", label: "Running", match: (c) => c.status === "running" },
 ];
 
+function savedFilter() {
+  try { return FILTERS.some((f) => f.key === localStorage.getItem("filter")) ? localStorage.getItem("filter") : "all"; } catch { return "all"; }
+}
+
 async function renderDashboard() {
-  let filter = "all";
+  let filter = savedFilter();
   let search = "";
   view.innerHTML = `
     <div class="page-head">
-      <div><h1>Dashboard</h1><p class="sub" id="dash-sub">Every vendor application, its status, and what happens next.</p></div>
-      <a class="btn primary" href="#/review/new">New test application</a>
+      <h1>Applications</h1>
+      <a class="btn primary" href="#/review/new">New application</a>
     </div>
-    <div class="tiles" id="tiles"></div>
+    <div class="toolbar">
+      <div class="filters" id="filters" role="group" aria-label="Filter by status"></div>
+      <input class="search" id="search" type="search" placeholder="Search" aria-label="Search vendors">
+    </div>
     <div class="dash">
-      <section class="card">
-        <div class="card-head"><h2>Applications</h2><input class="search" id="search" type="search" placeholder="Search vendors" aria-label="Search vendors"></div>
-        <div class="table-wrap" id="cases"></div>
-      </section>
-      <aside class="stack">
-        <section class="card">
-          <div class="card-head"><h2>Run a prepared case</h2></div>
-          <div id="scenarios">${state.meta.scenarios.map((s) => `
-            <button class="scenario" data-key="${esc(s.key)}">
-              <span class="scenario-tag">${esc(s.tag)}</span>
-              <div class="scenario-title">${esc(s.title)}</div>
-              <div class="scenario-shows">${esc(s.shows)}</div>
-            </button>`).join("")}</div>
-        </section>
-        <button class="btn ghost" id="reset" style="width:100%">Reset demo data</button>
+      <section class="card"><div class="table-wrap" id="cases">${loadingHtml()}</div></section>
+      <aside>
+        <h2 class="side-head">Prepared cases</h2>
+        <div id="scenarios" class="scenarios">${state.meta.scenarios.map((s) => `
+          <button class="scenario" data-key="${esc(s.key)}" title="${esc(s.shows)}">
+            <span class="scenario-title">${esc(s.title)}</span><span class="scenario-tag">${esc(s.tag)}</span>
+          </button>`).join("")}</div>
+        <button class="btn ghost small" id="reset">Reset demo data</button>
       </aside>
     </div>`;
 
-  let latest = { stats: null, cases: [] };
+  let cases = null;
 
   function paint() {
-    const { stats, cases } = latest;
-    if (!stats) return;
-    document.getElementById("tiles").innerHTML = TILES.map((t) => `
-      <button class="tile ${filter === t.key ? "active" : ""}" data-filter="${t.key}" aria-pressed="${filter === t.key}">
-        <span class="tile-label">${t.icon ? `<span class="${t.cls}">${icon(t.icon, 14)}</span>` : ""}${t.label}</span>
-        <div class="tile-value">${stats[t.stat]}</div>
-      </button>`).join("");
-    document.getElementById("dash-sub").textContent = stats.runs
-      ? `${stats.runs} run${stats.runs === 1 ? "" : "s"} so far, averaging ${seconds(stats.avg_run_ms)} each. ${stats.vendors_on_file} vendors on file.`
-      : `${stats.vendors_on_file} vendors on file. Run a prepared case or start a new application.`;
-    const match = TILES.find((t) => t.key === filter).match;
-    const rows = cases.filter(match).filter((c) => (c.vendor_name || "").toLowerCase().includes(search));
+    if (!cases) return;
+    document.getElementById("filters").innerHTML = FILTERS.map((f) => {
+      const count = cases.filter(f.match).length;
+      if (f.key === "running" && !count && filter !== "running") return "";
+      return `<button class="filter ${filter === f.key ? "active" : ""}" data-filter="${f.key}" aria-pressed="${filter === f.key}">${f.label}<span class="count">${count}</span></button>`;
+    }).join("");
+    const match = FILTERS.find((f) => f.key === filter).match;
+    const rows = cases.filter(match).filter((c) => `${c.vendor_name} ${c.id}`.toLowerCase().includes(search));
     document.getElementById("cases").innerHTML = rows.length ? `
       <table>
-        <thead><tr><th>Vendor</th><th>Status</th><th class="hide-sm">Next step</th><th class="hide-sm">Attempts</th><th>Updated</th></tr></thead>
+        <thead><tr><th>Vendor</th><th>Status</th><th class="hide-sm">Attempts</th><th>Updated</th></tr></thead>
         <tbody>${rows.map((c) => `
           <tr class="link" data-case="${esc(c.id)}" data-run="${c.latest_run_id}" data-status="${esc(c.status)}">
             <td><a class="name" href="#/review/case/${esc(c.id)}">${esc(c.vendor_name)}</a><div class="small muted">${esc(c.id)}${COUNTRY_FLAGS[c.country] ? ` · ${COUNTRY_FLAGS[c.country]}` : ""}</div></td>
             <td>${statusPill(c.status, c.waiting_on)}</td>
-            <td class="hide-sm small">${nextStep(c)}</td>
-            <td class="hide-sm">${c.version}</td>
+            <td class="hide-sm muted">${c.version}</td>
             <td class="small muted" style="white-space:nowrap">${timeAgo(c.updated_at)}</td>
           </tr>`).join("")}</tbody>
-      </table>` : `<div class="empty">${cases.length ? "No applications match." : "No applications yet. Run a prepared case to see the process work."}</div>`;
+      </table>` : `<div class="empty">${cases.length ? "No matches." : "No applications yet."}</div>`;
   }
 
   async function refresh() {
     try {
-      const [stats, cases] = await Promise.all([api("/api/stats"), api("/api/cases")]);
-      latest = { stats, cases };
+      cases = await api("/api/cases");
       paint();
     } catch { /* the next poll will try again */ }
   }
 
-  document.getElementById("tiles").addEventListener("click", (e) => {
-    const tile = e.target.closest("[data-filter]");
-    if (tile) { filter = tile.dataset.filter; paint(); }
+  document.getElementById("filters").addEventListener("click", (e) => {
+    const button = e.target.closest("[data-filter]");
+    if (!button) return;
+    filter = button.dataset.filter;
+    try { localStorage.setItem("filter", filter); } catch { /* only a convenience */ }
+    paint();
   });
   document.getElementById("search").addEventListener("input", (e) => { search = e.target.value.toLowerCase(); paint(); });
   document.getElementById("cases").addEventListener("click", (e) => {
@@ -246,9 +237,9 @@ async function renderDashboard() {
     } catch (err) { toast(err.message); button.disabled = false; }
   });
   document.getElementById("reset").addEventListener("click", async () => {
-    if (!confirm("Clear every application and restore the starting vendor list?")) return;
+    if (!confirm("Clear every application?")) return;
     await api("/api/reset", { method: "POST" });
-    toast("Demo data reset.");
+    toast("Reset.");
     refresh();
   });
 
@@ -273,9 +264,9 @@ async function renderRun(runId) {
   view.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="small muted"><a href="#/review">Dashboard</a> / <a href="#/review/case/${esc(run.case_id)}">${esc(run.case_id)}</a></div>
+        <div class="small muted"><a href="#/review">Applications</a> / <a href="#/review/case/${esc(run.case_id)}">${esc(run.case_id)}</a></div>
         <h1>${esc(run.submission.legal_name || "Unnamed vendor")}</h1>
-        <p class="sub">Attempt ${run.version}. <span id="elapsed"></span></p>
+        <p class="sub small">Attempt ${run.version} · <span id="elapsed"></span></p>
       </div>
     </div>
     <div class="run-layout">
@@ -303,13 +294,13 @@ async function renderRun(runId) {
     const counts = {};
     stage.checks.forEach((c) => { counts[c.result] = (counts[c.result] || 0) + 1; });
     const summary = stage.phase === "done"
-      ? [counts.block && `${counts.block} blocking`, counts.review && `${counts.review} for a person`, counts.fix && `${counts.fix} to fix`, counts.pass && `${counts.pass} passed`, counts.note && `${counts.note} note${counts.note > 1 ? "s" : ""}`].filter(Boolean).join(" · ")
-      : stage.phase === "running" ? "Working" : "";
+      ? [counts.block && `${counts.block} blocking`, counts.review && `${counts.review} to review`, counts.fix && `${counts.fix} to fix`, counts.pass && `${counts.pass} passed`].filter(Boolean).join(" · ")
+      : "";
     const docCards = Object.values(stage.docs).map((d) => `
       <div class="doc-card">
         <div class="doc-head">
           <span class="doc-name">${esc(d.label)}: ${esc(d.filename)}</span>
-          ${d.reading ? `<span class="badge ai">${icon("spinner", 12)}${state.health?.ai_configured ? `${esc(state.health.ai_name)} is reading` : "Reading"}</span>` : readerBadge(d)}
+          ${d.reading ? `<span class="badge">${icon("spinner", 12)}Reading</span>` : readerBadge(d)}
         </div>
         ${docFields(d.fields)}
       </div>`).join("");
@@ -318,8 +309,8 @@ async function renderRun(runId) {
     el.innerHTML = `
       <button class="stage-head" aria-expanded="${stageOpen(stage)}" data-stage="${key}" ${stage.phase === "waiting" ? "disabled" : ""}>
         <span class="stage-dot ${verdict || ""}">${dot}</span>
-        <span><div class="stage-title">${esc(stage.title)}</div><div class="stage-q">${esc(stage.question)}</div></span>
-        <span class="stage-meta">${summary}${stage.ms != null ? `<div class="muted small">${seconds(stage.ms)}</div>` : ""}</span>
+        <span class="stage-title">${esc(stage.title)}</span>
+        <span class="stage-meta">${summary}${stage.ms != null ? `<span class="muted"> · ${seconds(stage.ms)}</span>` : ""}</span>
       </button>${body}`;
   }
 
@@ -335,8 +326,8 @@ async function renderRun(runId) {
     const el = document.getElementById("decision");
     if (!finished) {
       const current = state.meta.stages.findIndex((s) => stages[s.key].phase !== "done");
-      el.innerHTML = `<div class="decision-top"><span class="section-label">Status</span>${statusPill("running", null, true)}</div>
-        <div class="waiting-note">Stage ${Math.min(current + 1, state.meta.stages.length)} of ${state.meta.stages.length}: ${esc(state.meta.stages[Math.max(current, 0)].title)}</div>`;
+      el.innerHTML = `<div class="decision-top">${statusPill("running", null, true)}
+        <p class="decision-reason small">Stage ${Math.min(current + 1, state.meta.stages.length)} of ${state.meta.stages.length}</p></div>`;
       return;
     }
     const status = endInfo.status;
@@ -346,39 +337,27 @@ async function renderRun(runId) {
     const issues = checks.filter((c) => ["block", "review", "fix"].includes(c.result)).sort((a, b) => RANK.indexOf(b.result) - RANK.indexOf(a.result));
     const notes = checks.filter((c) => c.result === "note");
     const scenario = state.meta.scenarios.find((s) => s.key === caseInfo.case.scenario);
-    const summaryText = {
-      approved: "No issues found, so this vendor has been added to the vendor master.",
-      rejected: "A blocking risk was found. The vendor sees a neutral message and the case is escalated.",
-    }[status] || (waitingOn === "vendor" ? "The vendor can fix what's listed, and the process runs again when they resubmit."
-      : "The vendor has been told it's under review. A person needs to look at this.");
-    const internalOnly = status === "rejected" || (status === "pending" && waitingOn !== "vendor");
     el.innerHTML = `
       <div class="decision-top">
         ${statusPill(status, waitingOn, true)}
-        <p class="decision-reason">${summaryText}</p>
-        ${endInfo.error ? `<p class="error-box" style="margin:8px 0 0">The process hit an unexpected error, so it was sent to a person: ${esc(endInfo.error)}</p>` : ""}
+        ${endInfo.error ? `<p class="error-box" style="margin:10px 0 0">${esc(endInfo.error)}</p>` : ""}
         <div class="count-row">
           <span><b>${counts.pass || 0}</b> passed</span>
-          ${counts.note ? `<span><b>${counts.note}</b> note${counts.note > 1 ? "s" : ""}</span>` : ""}
           ${counts.fix ? `<span><b>${counts.fix}</b> to fix</span>` : ""}
-          ${counts.review ? `<span><b>${counts.review}</b> for a person</span>` : ""}
+          ${counts.review ? `<span><b>${counts.review}</b> to review</span>` : ""}
           ${counts.block ? `<span><b>${counts.block}</b> blocking</span>` : ""}
-          ${endInfo.duration_ms ? `<span class="muted">in ${seconds(endInfo.duration_ms)}</span>` : ""}
+          ${endInfo.duration_ms ? `<span class="muted">${seconds(endInfo.duration_ms)}</span>` : ""}
         </div>
       </div>
-      ${issues.length ? `<div class="panel-section"><div class="section-label">Why</div>
+      ${issues.length ? `<div class="panel-section"><div class="section-label">Issues</div>
         <ul class="reasons">${issues.map((c) => `<li><span class="check-icon ${c.result}">${icon(c.result, 15)}</span><span>${esc(c.detail)}</span></li>`).join("")}</ul></div>` : ""}
-      ${notes.length ? `<div class="panel-section"><div class="section-label">Worth knowing</div>
+      ${notes.length ? `<div class="panel-section"><div class="section-label">Notes</div>
         <ul class="reasons">${notes.map((c) => `<li><span class="check-icon note">${icon("note", 15)}</span><span>${esc(c.detail)}</span></li>`).join("")}</ul></div>` : ""}
-      ${message ? `<div class="panel-section">
-        <div class="section-label"><span>What the vendor sees</span>${message.intro_source === "ai" ? `<span class="badge ai">Opening by ${esc(message.intro_by || "AI")}, list from rules</span>` : `<span class="badge">From template</span>`}</div>
-        ${messageCard(message)}
-        ${internalOnly ? `<p class="small muted" style="margin-top:8px">The reasons above stay internal. The AI never sees them, so it can't reveal them.</p>` : ""}
-      </div>` : ""}
+      ${message ? `<div class="panel-section"><div class="section-label">Message to vendor</div>${messageCard(message)}</div>` : ""}
       <div class="panel-section actions">
         ${status === "pending" && waitingOn === "vendor" && scenario?.fix_label ? `<button class="btn primary" id="prepared-fix">${esc(scenario.fix_label)}</button>` : ""}
-        ${status === "pending" && waitingOn === "vendor" ? `<a class="btn" href="#/review/vendor/${esc(run.case_id)}">Open the vendor's view</a>` : ""}
-        <a class="btn" href="#/review/case/${esc(run.case_id)}">Open case and audit trail</a>
+        ${status === "pending" && waitingOn === "vendor" ? `<a class="btn" href="#/review/vendor/${esc(run.case_id)}">Vendor view</a>` : ""}
+        <a class="btn" href="#/review/case/${esc(run.case_id)}">Open case</a>
       </div>`;
     document.getElementById("prepared-fix")?.addEventListener("click", async (e) => {
       e.target.disabled = true;
@@ -411,7 +390,7 @@ async function renderRun(runId) {
     decision = latest.run.decision || decision;
     message = latest.run.message || message;
     caseInfo = await api(`/api/cases/${run.case_id}`);
-    document.getElementById("elapsed").textContent = endInfo?.duration_ms ? `Finished in ${seconds(endInfo.duration_ms)}.` : "Finished.";
+    document.getElementById("elapsed").textContent = endInfo?.duration_ms ? `finished in ${seconds(endInfo.duration_ms)}` : "finished";
     paintDecision();
   }
 
@@ -428,7 +407,7 @@ async function renderRun(runId) {
 
   const timer = setInterval(() => {
     const el = document.getElementById("elapsed");
-    if (el) el.textContent = `Running for ${seconds(Date.now() - startedAt)}.`;
+    if (el) el.textContent = seconds(Date.now() - startedAt);
   }, 100);
   const source = new EventSource(`/api/runs/${runId}/stream`);
   // Some hosts buffer live streams, so a slow poll keeps the view moving regardless.
@@ -470,57 +449,56 @@ async function renderCase(caseId) {
   view.innerHTML = `
     <div class="page-head">
       <div>
-        <div class="small muted"><a href="#/review">Dashboard</a> / ${esc(c.id)}</div>
+        <div class="small muted"><a href="#/review">Applications</a> / ${esc(c.id)}</div>
         <h1>${esc(c.vendor_name)}</h1>
-        <div class="row" style="margin-top:6px">${statusPill(c.status, c.waiting_on)}${overruled ? `<span class="badge">Decided by a reviewer</span>` : ""}</div>
+        <div class="row" style="margin-top:6px">${statusPill(c.status, c.waiting_on)}${overruled ? `<span class="badge">By reviewer</span>` : ""}</div>
       </div>
       <div class="row">
         ${c.status === "pending" && c.waiting_on === "vendor" && scenario?.fix_label ? `<button class="btn primary" id="prepared-fix">${esc(scenario.fix_label)}</button>` : ""}
-        ${c.status === "pending" && c.waiting_on === "vendor" ? `<a class="btn" href="#/review/vendor/${esc(c.id)}">Vendor's view</a>` : ""}
-        <a class="btn" href="#/review/run/${latest.id}">Replay latest run</a>
+        ${c.status === "pending" && c.waiting_on === "vendor" ? `<a class="btn" href="#/review/vendor/${esc(c.id)}">Vendor view</a>` : ""}
+        <a class="btn" href="#/review/run/${latest.id}">Latest run</a>
       </div>
     </div>
     <div class="case-layout">
       <div class="stack">
-        ${overruled ? `<section class="card"><div class="card-head"><h2>Reviewer's decision</h2></div><div class="card-body"><b>${esc(overruled.action)}.</b> ${esc(overruled.detail)}</div></section>` : ""}
+        ${overruled ? `<section class="card"><div class="card-head"><h2>Reviewer decision</h2></div><div class="card-body"><b>${esc(overruled.action)}.</b> ${esc(overruled.detail)}</div></section>` : ""}
         <section class="card">
-          <div class="card-head"><h2>Why the process reached this status</h2></div>
+          <div class="card-head"><h2>Issues</h2></div>
           <div class="card-body">
-            ${issues.length ? issues.map(checkRow).join("") : `<p>All ${checks.length} checks passed or were only worth noting.</p>`}
+            ${issues.length ? issues.map(checkRow).join("") : `<p class="muted">None.</p>`}
             ${notes.map(checkRow).join("")}
           </div>
         </section>
         <section class="card">
-          <div class="card-head"><h2>Message to the vendor</h2><span class="muted small">Attempt ${latest.version}</span></div>
+          <div class="card-head"><h2>Message to vendor</h2></div>
           <div class="card-body">${messageCard(c.message_override || latest.message)}</div>
         </section>
         <section class="card">
-          <details><summary>All ${checks.length} checks from attempt ${latest.version}</summary><div class="inner">${checks.map(checkRow).join("")}</div></details>
+          <details><summary>All checks (${checks.length})</summary><div class="inner">${checks.map(checkRow).join("")}</div></details>
         </section>
         <section class="card">
-          <details><summary>What the vendor submitted</summary><div class="inner">
+          <details><summary>Submission</summary><div class="inner">
             <dl class="fields">${summaryRows.map(([k, value]) => `<dt>${esc(k)}</dt><dd>${esc(value)}</dd>`).join("")}</dl>
           </div></details>
         </section>
       </div>
       <aside class="stack">
         <section class="card">
-          <div class="card-head"><h2>Reviewer decision</h2></div>
+          <div class="card-head"><h2>Decision</h2></div>
           <div class="card-body">
-            <label class="small muted" for="review-note">The process's decision stands unless you overrule it. A reason is required and is logged.</label>
-            <textarea id="review-note" placeholder="For example: confirmed the new account by phone" style="margin-top:6px"></textarea>
+            <label class="sr-only" for="review-note">Reason</label>
+            <textarea id="review-note" placeholder="Reason (required)"></textarea>
             <div class="row" style="margin-top:8px">
-              <button class="btn good" data-review="approve" ${waitingOnVendor ? "disabled" : ""}>${icon("pass", 14)}Approve</button>
+              <button class="btn good" data-review="approve" ${waitingOnVendor ? 'disabled title="The vendor has to resubmit first"' : ""}>${icon("pass", 14)}Approve</button>
               <button class="btn danger" data-review="reject">${icon("block", 14)}Reject</button>
             </div>
-            ${waitingOnVendor ? `<p class="small muted" style="margin-top:8px">Approve opens once the vendor has corrected what they were asked to. You can still reject.</p>` : ""}
+            ${waitingOnVendor ? `<p class="small muted" style="margin-top:8px">Approve unlocks after the vendor resubmits.</p>` : ""}
           </div>
         </section>
         ${c.vendor_token ? `<section class="card">
-          <div class="card-head"><h2>Vendor's private link</h2></div>
+          <div class="card-head"><h2>Vendor link</h2></div>
           <div class="card-body">
-            <div class="link-box"><input readonly aria-label="Vendor's private link" value="${esc(vendorLink(c.id, c.vendor_token))}"><button class="btn" data-copy>Copy</button></div>
-            <p class="small muted" style="margin-top:6px">The vendor got this when they applied. It opens only their own application.</p>
+            <div class="link-box"><input readonly aria-label="Vendor link" value="${esc(vendorLink(c.id, c.vendor_token))}"><button class="btn" data-copy>Copy</button></div>
           </div>
         </section>` : ""}
         <section class="card">
@@ -535,7 +513,7 @@ async function renderCase(caseId) {
           ${documents.length ? documents.map((d) => `<div class="attempt">
             <a href="/api/documents/${d.id}" target="_blank" rel="noopener" class="row" style="flex-wrap:nowrap;min-width:0">${icon("doc", 15)}<span style="overflow-wrap:anywhere">${esc(d.filename)}</span></a>
             <span class="small muted">Attempt ${d.version}</span>
-          </div>`).join("") : `<div class="card-body muted">No documents uploaded.</div>`}
+          </div>`).join("") : `<div class="card-body muted">None.</div>`}
         </section>
         <section class="card">
           <div class="card-head"><h2>Audit trail</h2></div>
@@ -558,7 +536,7 @@ async function renderCase(caseId) {
   view.querySelector("[data-copy]")?.addEventListener("click", (e) => copyLink(e.target.previousElementSibling.value));
   view.querySelectorAll("[data-review]").forEach((button) => button.addEventListener("click", async () => {
     const note = document.getElementById("review-note").value;
-    if (!note.trim()) { toast("Add a reason first. Overruling the process is logged."); document.getElementById("review-note").focus(); return; }
+    if (!note.trim()) { toast("Add a reason first."); document.getElementById("review-note").focus(); return; }
     try {
       await api(`/api/cases/${c.id}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: button.dataset.review, note }) });
       renderCase(caseId);
@@ -578,13 +556,13 @@ const PLACEHOLDERS = {
 
 function formHtml() {
   const field = (name, label, attrs = "", wide = false, hint = "") => `<div class="field ${wide ? "wide" : ""}" data-field="${name}"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" autocomplete="off" ${attrs}>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
-  const fileField = (name, label, labelId, hintId) => `<div class="field wide" data-field="${name}"><label for="f-${name}" ${labelId ? `id="${labelId}"` : ""}>${label}</label><input class="file-input" id="f-${name}" name="${name}" type="file" accept=".pdf,.png,.jpg,.jpeg"><div class="hint" id="${hintId}">PDF, PNG or JPEG, up to 10 MB.</div></div>`;
+  const fileField = (name, label, labelId, hintId) => `<div class="field wide" data-field="${name}"><label for="f-${name}" ${labelId ? `id="${labelId}"` : ""}>${label}</label><input class="file-input" id="f-${name}" name="${name}" type="file" accept=".pdf,.png,.jpg,.jpeg"><div class="hint" id="${hintId}">PDF, PNG or JPEG, max 10 MB</div></div>`;
   return `
     <section class="card form-section"><div class="card-head"><h2>Company</h2></div><div class="card-body field-grid">
-      ${field("legal_name", "Legal company name", "", true, "Exactly as it appears on your tax registration.")}
+      ${field("legal_name", "Legal company name", "", true)}
       <div class="field" data-field="country"><label for="f-country">Country</label><select id="f-country" name="country">${Object.entries(state.meta.countries).map(([k, c]) => `<option value="${k}">${esc(c.name)}</option>`).join("")}</select></div>
       <div class="field" data-field="entity_type"><label for="f-entity_type">Entity type</label><select id="f-entity_type" name="entity_type"></select></div>
-      ${field("owner_name", "Owner name", "", true, "Sole proprietors can be paid into an account in the owner's own name.")}
+      ${field("owner_name", "Owner name", "", true)}
       ${field("address", "Registered address", "", true)}
       ${field("city", "City")}
       <div class="field" data-field="state"><label for="f-state">State</label><input id="f-state" name="state" list="state-list" autocomplete="off"><datalist id="state-list"></datalist></div>
@@ -601,7 +579,7 @@ function formHtml() {
       ${fileField("tax_certificate", "Tax document", "tax-doc-label", "tax-doc-current")}
     </div></section>
     <section class="card form-section"><div class="card-head"><h2>Bank</h2></div><div class="card-body field-grid">
-      ${field("account_holder", "Account holder name", "", true, "The name the bank account is held in.")}
+      ${field("account_holder", "Account holder name", "", true)}
       ${field("bank_name", "Bank name")}
       ${field("account_number", "Account number", 'inputmode="numeric"')}
       ${field("bank_code", "Bank code", 'autocapitalize="characters"')}
@@ -703,7 +681,7 @@ function wireForm(root) {
       const names = order.filter((n) => errors[n]);  // in the order they appear on the page
       if (!names.length) { errorBox.innerHTML = ""; return true; }
       const label = (n) => root.querySelector(`[data-field="${n}"] label`)?.textContent || n;
-      errorBox.innerHTML = `<div class="error-box" role="alert"><b>${names.length === 1 ? "1 detail needs" : `${names.length} details need`} correcting before you can send this.</b>
+      errorBox.innerHTML = `<div class="error-box" role="alert"><b>${names.length === 1 ? "1 field needs" : `${names.length} fields need`} correcting</b>
         <ul>${names.map((n) => `<li><a href="#" data-goto="${n}">${esc(label(n))}</a>: ${esc(errors[n])}</li>`).join("")}</ul></div>`;
       errorBox.querySelectorAll("[data-goto]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); value(a.dataset.goto)?.focus(); }));
       value(names[0])?.focus();
@@ -731,11 +709,11 @@ async function attachSampleFile(input, path) {
 function onSubmit(root, form, errorBox, send) {
   root.addEventListener("submit", async (e) => {
     e.preventDefault();
-    setBusy(root, true, "Checking your details");
+    setBusy(root, true, "Checking");
     const errors = await form.errorsNow();
     setBusy(root, false);
     if (!form.showErrors(errors, errorBox)) return;
-    setBusy(root, true, "Uploading documents");
+    setBusy(root, true, "Submitting");
     try {
       await send();
     } catch (err) {
@@ -750,11 +728,10 @@ function onSubmit(root, form, errorBox, send) {
 function renderApply() {
   view.innerHTML = `
     <div class="form-layout">
-      <div class="page-head"><div><h1>Apply to become a vendor</h1>
-        <p class="sub">Fill in every field and attach both documents. Each answer is checked as you go, and the form won't send until they're all in the right format.</p></div></div>
+      <div class="page-head"><h1>Vendor application</h1></div>
       <div id="form-error"></div>
       <form id="application" novalidate>${formHtml()}
-        <div class="form-foot"><button class="btn primary" type="submit">Submit application</button></div>
+        <div class="form-foot"><button class="btn primary" type="submit">Submit</button></div>
       </form>
     </div>`;
   const root = document.getElementById("application");
@@ -769,16 +746,16 @@ function renderNew() {
   view.innerHTML = `
     <div class="form-layout">
       <div class="page-head"><div>
-        <div class="small muted"><a href="#/review">Dashboard</a> / Test application</div>
-        <h1>New test application</h1><p class="sub">The same form vendors see, with prepared cases to start from. You'll watch the run live.</p>
+        <div class="small muted"><a href="#/review">Applications</a> / New</div>
+        <h1>New application</h1>
       </div></div>
-      <section class="card form-section"><div class="card-body fill-bar">
-        <label for="fill" class="small muted">Start from a prepared case, then change anything:</label>
+      <div class="fill-bar form-section">
+        <label for="fill" class="small muted">Prefill</label>
         <select id="fill"><option value="">Blank form</option>${state.meta.scenarios.map((s) => `<option value="${esc(s.key)}">${esc(s.tag)}: ${esc(s.title)}</option>`).join("")}</select>
-      </div></section>
+      </div>
       <div id="form-error"></div>
       <form id="application" novalidate>${formHtml()}
-        <div class="form-foot"><a class="btn ghost" href="#/review">Cancel</a><button class="btn primary" type="submit">Submit and watch the run</button></div>
+        <div class="form-foot"><a class="btn ghost" href="#/review">Cancel</a><button class="btn primary" type="submit">Submit</button></div>
       </form>
     </div>`;
   const root = document.getElementById("application");
@@ -806,9 +783,9 @@ function renderNew() {
 // ---------- the vendor's own application ----------
 
 const VENDOR_STEPS = {
-  intake: "Receiving your application", completeness: "Checking nothing is missing", format: "Checking your tax and bank details",
-  documents: "Reading your documents", cross: "Comparing your documents with your answers", risk: "Running standard compliance checks",
-  decision: "Preparing our reply",
+  intake: "Received", completeness: "Required details", format: "Tax and bank details",
+  documents: "Reading documents", cross: "Matching documents", risk: "Compliance checks",
+  decision: "Preparing reply",
 };
 
 const vendorLink = (caseId, token) => `${location.origin}${location.pathname}#/status/${caseId}/${token}`;
@@ -821,7 +798,7 @@ function vendorPill(status, waitingOn) {
   if (status === "running") return `<span class="pill running large">${icon("spinner", 18)}Being checked</span>`;
   if (status === "approved") return `<span class="pill approved large">${icon("pass", 18)}Approved</span>`;
   if (status === "rejected") return `<span class="pill rejected large">${icon("block", 18)}Not approved</span>`;
-  if (waitingOn === "vendor") return `<span class="pill pending-vendor large">${icon("fix", 18)}Action needed</span>`;
+  if (waitingOn === "vendor") return `<span class="pill pending-vendor large">${icon("fix", 18)}Changes needed</span>`;
   return `<span class="pill pending-internal large">${icon("clock", 18)}Under review</span>`;
 }
 
@@ -831,8 +808,7 @@ function progressCard(progress) {
   const current = keys.find((k) => !done.has(k));
   const percent = Math.round((done.size / keys.length) * 100);
   return `<section class="card form-section" aria-live="polite"><div class="card-body">
-    <h2>We're checking your application</h2>
-    <p class="small muted" style="margin-top:2px">This usually takes under a minute. This page updates by itself.</p>
+    <h2>Checking your application</h2>
     <div class="progress-bar" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100" aria-label="Progress"><span style="width:${Math.max(percent, 4)}%"></span></div>
     <ul class="steps">${keys.map((k) => {
       const phase = done.has(k) ? "done" : k === current ? "current" : "waiting";
@@ -850,21 +826,21 @@ async function renderVendor(caseId, token) {
   view.innerHTML = `
     <div class="form-layout">
       <div class="page-head"><div>
-        <div class="small muted">${token ? "Your application" : `<a href="#/review/case/${esc(caseId)}">${esc(caseId)}</a> / What the vendor sees`}, reference ${esc(data.case_id)}</div>
+        <div class="small muted">${token ? "" : `<a href="#/review/case/${esc(caseId)}">${esc(caseId)}</a> / Vendor view · `}Reference ${esc(data.case_id)}</div>
         <h1>${esc(data.submission.legal_name || "Your application")}</h1>
         <div class="row" style="margin-top:8px">${vendorPill(data.status, data.waiting_on)}</div>
       </div></div>
-      ${token ? `<section class="card form-section"><div class="card-body">
-        <div class="small" style="margin-bottom:6px"><b>Keep this link.</b> It's the only way back to your application, and anyone with it can see it.</div>
-        <div class="link-box"><input readonly aria-label="Your private link" value="${esc(vendorLink(caseId, token))}"><button class="btn" data-copy>Copy</button></div>
-      </div></section>` : `<div class="notice">You're seeing this as a reviewer. The vendor sees the same page through their private link.</div>`}
+      ${token ? `<div class="form-section">
+        <div class="small muted" style="margin-bottom:6px">Save this link to come back to your application.</div>
+        <div class="link-box"><input readonly aria-label="Your link" value="${esc(vendorLink(caseId, token))}"><button class="btn" data-copy>Copy</button></div>
+      </div>` : ""}
       <div id="vendor-body">${data.status === "running" ? progressCard(data.progress) : ""}</div>
-      ${data.status !== "running" ? `<section class="card form-section"><div class="card-head"><h2>Latest message</h2></div><div class="card-body">${messageCard(data.message)}</div></section>` : ""}
+      ${data.status !== "running" ? `<section class="card form-section"><div class="card-body">${messageCard(data.message)}</div></section>` : ""}
       ${canResubmit ? `
-      <div class="page-head" style="margin:24px 0 12px"><div><h2>Correct your application</h2><p class="sub small">Change what the message asks for. Documents you don't replace stay on file.</p></div></div>
+      <div class="page-head" style="margin:28px 0 12px"><h2>Update your application</h2></div>
       <div id="form-error"></div>
       <form id="application" novalidate>${formHtml()}
-        <div class="form-foot"><button class="btn primary" type="submit">Resubmit application</button></div>
+        <div class="form-foot"><button class="btn primary" type="submit">Resubmit</button></div>
       </form>` : ""}
     </div>`;
   view.querySelector("[data-copy]")?.addEventListener("click", (e) => copyLink(e.target.previousElementSibling.value));
@@ -883,7 +859,7 @@ async function renderVendor(caseId, token) {
   const form = wireForm(root);
   form.fill(data.submission);
   form.setDocsOnFile(Object.keys(data.documents));
-  const current = (id, slot) => { document.getElementById(id).textContent = data.documents[slot] ? `On file: ${data.documents[slot].filename}. Leave empty to keep it.` : "Nothing on file yet."; };
+  const current = (id, slot) => { document.getElementById(id).textContent = data.documents[slot] ? `On file: ${data.documents[slot].filename}. Leave empty to keep it.` : "Nothing on file."; };
   current("tax-doc-current", "tax_certificate");
   current("bank-doc-current", "bank_proof");
   onSubmit(root, form, document.getElementById("form-error"), async () => {
@@ -896,17 +872,17 @@ async function renderVendor(caseId, token) {
 
 function renderLogin() {
   if (!state.session.reviewer_setup) {
-    view.innerHTML = `<div class="empty"><p>The reviewer console isn't set up on this server.</p><p class="small" style="margin-top:8px">Set REVIEWER_PASSCODE in the host's environment, then restart it.</p></div>`;
+    view.innerHTML = `<div class="empty"><p>Reviewer sign-in isn't set up. Set REVIEWER_PASSCODE.</p></div>`;
     return;
   }
   view.innerHTML = `
-    <section class="card login"><div class="card-head"><h2>Reviewer sign-in</h2></div>
-      <form class="card-body" id="login" novalidate>
-        <p class="small muted">The dashboard, every application and the approve and reject buttons are for the procurement team. Vendors only see their own application, through the link they get when they apply.</p>
-        <label for="passcode" class="small" style="display:block;margin-top:12px;font-weight:500">Passcode</label>
+    <section class="login">
+      <h1>Reviewer sign-in</h1>
+      <form id="login" novalidate>
+        <label for="passcode" class="small" style="display:block;font-weight:500">Passcode</label>
         <input id="passcode" type="password" autocomplete="current-password" required>
         <div id="login-error" class="field-error" role="alert"></div>
-        <div class="form-foot" style="margin-top:12px"><a class="btn ghost" href="#/">Vendor portal</a><button class="btn primary" type="submit">Sign in</button></div>
+        <button class="btn primary" type="submit" style="width:100%;margin-top:14px">Sign in</button>
       </form>
     </section>`;
   const formEl = document.getElementById("login");
@@ -938,9 +914,9 @@ function paintChrome(area) {
   const reviewer = state.session.reviewer;
   const link = (href, label, key) => `<a href="${href}" class="${area === key ? "active" : ""}">${label}</a>`;
   document.getElementById("nav").innerHTML = reviewer
-    ? link("#/review", "Dashboard", "dashboard") + link("#/review/new", "Test application", "new") + link("#/", "Vendor portal", "apply")
-    : link("#/", "Apply", "apply");
-  const ai = state.health.ai_configured ? `<span class="badge ai">AI reading on: ${esc(state.health.ai_name)}</span>` : `<span class="badge warn">AI off: backup parser only</span>`;
+    ? link("#/review", "Applications", "dashboard") + link("#/review/new", "New", "new") + link("#/", "Vendor form", "apply")
+    : "";
+  const ai = state.health.ai_configured ? "" : `<span class="badge warn" title="Documents are read by the backup text parser">AI off</span>`;
   const account = document.getElementById("account");
   account.innerHTML = reviewer
     ? `${ai}<button class="btn ghost" id="sign-out">Sign out</button>`
@@ -969,10 +945,10 @@ async function route() {
     else if (page === "review" && sub === "run") await renderRun(id);
     else if (page === "review" && sub === "case") await renderCase(id);
     else if (page === "review" && sub === "vendor") await renderVendor(id, null);
-    else view.innerHTML = `<div class="empty"><p>This page doesn't exist.</p><p style="margin-top:10px"><a href="#/">Go to the vendor portal</a></p></div>`;
+    else view.innerHTML = `<div class="empty"><p>Page not found.</p><p style="margin-top:10px"><a href="#/">Home</a></p></div>`;
   } catch (err) {
     if (err.status === 401) { await loadSession(); paintChrome(area); renderLogin(); return; }
-    const back = page === "review" ? `<a href="#/review">Back to the dashboard</a>` : `<a href="#/">Go to the vendor portal</a>`;
+    const back = page === "review" ? `<a href="#/review">Applications</a>` : `<a href="#/">Home</a>`;
     view.innerHTML = `<div class="empty"><p>${esc(err.message)}</p><p style="margin-top:10px">${back}</p></div>`;
   }
 }
@@ -985,10 +961,10 @@ async function start() {
       break;
     } catch (err) {
       if (attempt >= 24) {
-        view.innerHTML = `<div class="empty"><p>The demo host isn't answering (${esc(err.message)}).</p><p style="margin-top:10px"><a href="">Reload the page</a></p></div>`;
+        view.innerHTML = `<div class="empty"><p>The server isn't answering.</p><p style="margin-top:10px"><a href="">Reload</a></p></div>`;
         return;
       }
-      view.innerHTML = `<div class="empty" role="status"><p>The demo host is waking up. This can take about a minute.</p><p class="small muted" style="margin-top:8px">Trying again automatically (attempt ${attempt}).</p></div>`;
+      view.innerHTML = loadingHtml("Starting up, this can take a minute");
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }

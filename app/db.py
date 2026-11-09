@@ -137,6 +137,23 @@ def fail_run(run_id: int, case_id: str, message: dict, error: str) -> None:
         conn.execute("UPDATE cases SET status='pending', waiting_on='internal', updated_at=? WHERE id=?", (now(), case_id))
 
 
+def interrupted() -> list[dict]:
+    """Cases still marked running, with their latest run if there is one. Called at start-up,
+    when no run can really be in progress: any that were died with the last server."""
+    with connect() as conn:
+        rows = conn.execute("""SELECT c.id AS case_id, r.id AS run_id, r.submission FROM cases c
+                               LEFT JOIN runs r ON r.case_id=c.id AND r.version=c.version
+                               WHERE c.status='running'""").fetchall()
+    return [_decode(r, "submission") for r in rows]
+
+
+def delete_case(case_id: str) -> None:
+    with connect() as conn:
+        for table in ("documents", "audit", "vendors"):
+            conn.execute(f"DELETE FROM {table} WHERE case_id=?", (case_id,))
+        conn.execute("DELETE FROM cases WHERE id=?", (case_id,))
+
+
 def get_run(run_id: int) -> dict | None:
     with connect() as conn:
         return _decode(conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone(), *RUN_JSON)

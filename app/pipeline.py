@@ -78,6 +78,28 @@ def _read_all(run_id: int, docs: dict, prior_reads: dict, reader) -> dict:
     return reads
 
 
+RESTART_ERROR = "The server restarted while this application was being checked."
+
+
+def recover_interrupted() -> int:
+    """Runs happen in a background thread, so a restart can cut one off and leave its case marked
+    running for good, which also blocks resubmitting and reviewing. Hand each one to a person instead."""
+    recovered = 0
+    for row in db.interrupted():
+        if row["run_id"] is None:  # a case whose first run never started has nothing to show anyone
+            db.delete_case(row["case_id"])
+            continue
+        sub = row["submission"] or {}
+        message = {**rules.build_message({"status": "pending", "waiting_on": "internal"}, [], sub), "intro_source": "template"}
+        db.fail_run(row["run_id"], row["case_id"], message, RESTART_ERROR)
+        db.add_audit(row["case_id"], "process", "Check interrupted by a server restart, sent to a person", RESTART_ERROR)
+        db.add_event(row["run_id"], "run_end", None, {"status": "pending", "waiting_on": "internal", "error": RESTART_ERROR})
+        recovered += 1
+    if recovered:
+        log.warning("Sent %s interrupted run(s) to a person.", recovered)
+    return recovered
+
+
 def execute(run_id: int, case_id: str, version: int, sub: dict, docs: dict, reader=None, intro_writer=None) -> None:
     reader = reader or documents.read_document
     intro_writer = intro_writer or documents.draft_intro

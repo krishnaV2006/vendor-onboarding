@@ -450,4 +450,4 @@ def build_message(decision: dict, checks: list[Check], sub: dict, intro: str | N
     items = [c.vendor_action for c in checks if c.result == FIX and c.vendor_action]
     return {"subject": f"Action needed: your vendor application for {vendor}", "greeting": f"Hi {name},",
             "intro": intro or f"Thanks for applying to become a vendor. We've checked your application for {vendor}, and need a few things before we can finish.",
-            "items": items, "closing": "You can update your application below. You only need to change what's listed here."}
+            "items": items, "closing": "Update your application below. Only what's listed needs to change."}

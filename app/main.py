@@ -38,6 +38,7 @@ LOGIN_WINDOW_SECONDS = 900
 
 app = FastAPI(title="Vendor onboarding")
 db.init()
+pipeline.recover_interrupted()
 threading.Thread(target=documents.warm_up, daemon=True).start()
 _failed_logins: dict[str, list[float]] = {}
 
@@ -132,9 +133,14 @@ def _scenarios() -> dict:
     return json.loads((SAMPLES / "scenarios.json").read_text(encoding="utf-8"))
 
 
-def _start_run(case_id: str, submission: dict, new_docs: dict) -> dict:
+def _check_daily_limit() -> None:
+    """Checked before a case is created, so hitting the limit never leaves an empty case behind."""
     if db.runs_today() >= MAX_RUNS_PER_DAY:
         raise HTTPException(429, "The demo's daily limit has been reached.")
+
+
+def _start_run(case_id: str, submission: dict, new_docs: dict) -> dict:
+    _check_daily_limit()
     run_id, version = db.create_run(case_id, submission)
     for slot, doc in new_docs.items():
         db.add_document(case_id, version, slot, doc["filename"], doc["media_type"], pipeline.sha256(doc["data"]), doc["data"])
@@ -216,6 +222,7 @@ async def submit(request: Request, fields: str = Form(...), prepared: str | None
     submission = _parse_fields(fields)
     new_docs = await _read_uploads(tax_certificate, bank_proof)
     _reject_invalid(submission, set(new_docs))
+    _check_daily_limit()
     scenario = next((s["key"] for s in _scenarios()["scenarios"] if s["key"] == prepared), None) if is_reviewer(request) else None
     if scenario:  # a reviewer filled the form from a prepared case
         db.remove_prepared_vendors(scenario)
@@ -326,6 +333,7 @@ def run_sample(key: str):
     scenario = next((s for s in _scenarios()["scenarios"] if s["key"] == key), None)
     if not scenario:
         raise HTTPException(404, "Unknown scenario.")
+    _check_daily_limit()
     db.remove_prepared_vendors(key)
     case_id, token = db.create_case(scenario["submission"]["legal_name"], scenario["submission"]["country"], key)
     started = _start_run(case_id, scenario["submission"], {slot: _sample_doc(path) for slot, path in scenario["documents"].items()})
