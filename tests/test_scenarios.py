@@ -163,10 +163,10 @@ def test_empty_disk_restores_the_recorded_runs_and_reset_still_clears_them(monke
     from app import db
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "fresh" / "vendor.db")
     db.init()
-    assert client.get("/api/stats").json()["total"] == 7
+    assert client.get("/api/stats").json()["total"] == 8
     wait_for(start("happy")["run_id"])
     db.init()  # a disk that already has data keeps it
-    assert client.get("/api/stats").json()["total"] == 8
+    assert client.get("/api/stats").json()["total"] == 9
     client.post("/api/reset")
     assert client.get("/api/stats").json()["total"] == 0
 
