@@ -181,6 +181,47 @@
       }
     },
     {
+      "key": "incomplete",
+      "tag": "Edge case 5",
+      "title": "Ganga Packaging Pvt Ltd",
+      "shows": "Arrived by email, so it skipped the form. PAN, account number and bank document are missing, and the tax ID is a US EIN. The vendor is told exactly what to send.",
+      "expected": "pending",
+      "fix_label": "Vendor sends the missing details",
+      "submission": {
+        "trade_name": "",
+        "owner_name": "",
+        "contact_phone": "+91 98110 66778",
+        "pan": "",
+        "state": "Uttar Pradesh",
+        "legal_name": "Ganga Packaging Pvt Ltd",
+        "entity_type": "Private Limited",
+        "country": "IN",
+        "address": "C-41, Sector 63",
+        "city": "Noida",
+        "postal_code": "201301",
+        "contact_name": "Suresh Verma",
+        "contact_email": "suresh@gangapackaging.example",
+        "tax_id": "12-3456789",
+        "account_holder": "GANGA PACKAGING PRIVATE LIMITED",
+        "bank_name": "State Bank of India",
+        "account_number": "",
+        "bank_code": "SBIN0001789"
+      },
+      "documents": {
+        "tax_certificate": "ganga_gst_certificate.pdf"
+      },
+      "fix": {
+        "changes": {
+          "tax_id": "09AAGCG5512H1ZN",
+          "pan": "AAGCG5512H",
+          "account_number": "38291047561"
+        },
+        "documents": {
+          "bank_proof": "ganga_cancelled_cheque.pdf"
+        }
+      }
+    },
+    {
       "key": "scanned",
       "tag": "Bonus",
       "title": "Thames Valley Fabrication Ltd",

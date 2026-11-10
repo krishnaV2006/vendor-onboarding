@@ -21,7 +21,6 @@ PAN_HOLDER_TYPES = {
     "L": "a local authority", "J": "an artificial juridical person", "G": "a government body",
 }
 
-# First four letters of an IFSC identify the bank.
 # The first IFSC letters name the bank. Each bank goes by its full name or a common short form.
 IFSC_BANKS = {
     "HDFC": ("HDFC",), "ICIC": ("ICICI",), "SBIN": ("STATE BANK", "SBI"), "UTIB": ("AXIS", "UTI BANK"),

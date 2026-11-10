@@ -70,7 +70,7 @@ def test_review_buttons_are_closed_to_visitors():
 
 def test_visitors_dont_get_the_prepared_cases():
     assert visitor().get("/api/meta").json()["scenarios"] == []
-    assert len(SCENARIOS) == 7
+    assert len(SCENARIOS) == 8
 
 
 def test_wrong_passcode_is_refused_and_repeated_guessing_is_locked_out():
@@ -155,9 +155,20 @@ def test_junk_application_is_refused_with_every_problem_named():
     assert reviewer.get("/api/stats").json()["total"] == before
 
 
-def test_every_prepared_case_gets_past_the_form():
+def test_every_prepared_case_gets_past_the_form_except_the_emailed_one():
     for scenario in SCENARIOS.values():
-        assert intake.validate(scenario["submission"], set(scenario["documents"])) == {}, scenario["key"]
+        errors = intake.validate(scenario["submission"], set(scenario["documents"]))
+        if scenario["key"] == "incomplete":  # it arrived by email, so it never went through the form
+            assert set(errors) == {"pan", "account_number", "tax_id", "bank_proof"}
+        else:
+            assert errors == {}, scenario["key"]
+
+
+def test_a_visitor_cant_send_the_emailed_case_through_the_form():
+    emailed = SCENARIOS["incomplete"]
+    files = {"tax_certificate": ("ganga_gst_certificate.pdf", Path("samples/ganga_gst_certificate.pdf").read_bytes(), "application/pdf")}
+    response = visitor().post("/api/submissions", data={"fields": json.dumps(emailed["submission"]), "prepared": "incomplete"}, files=files)
+    assert response.status_code == 422
 
 
 def test_the_form_can_check_itself_before_sending():

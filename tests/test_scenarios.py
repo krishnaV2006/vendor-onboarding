@@ -96,6 +96,22 @@ def test_wrong_documents_then_fix_is_approved():
     assert second["status"] == "approved", second["decision"]
 
 
+def test_incomplete_emailed_application_lists_everything_needed_then_fix_is_approved():
+    started = start("incomplete")
+    run = wait_for(started["run_id"])
+    assert (run["status"], run["waiting_on"]) == ("pending", "vendor")
+    assert {"fields_present", "bank_doc_present", "tax_id_format", "tax_doc_id"} <= failing_ids(run, "fix")
+    assert not failing_ids(run, "block") and not failing_ids(run, "review")
+    items = " ".join(run["message"]["items"])
+    assert "PAN" in items and "Bank account number" in items and "cancelled cheque" in items and "US EIN" in items
+
+    again = client.post(f"/api/cases/{started['case_id']}/resubmit-sample").json()
+    second = wait_for(again["run_id"])
+    assert second["status"] == "approved", second["decision"]
+    assert set(second["reads"]) == {"tax_certificate", "bank_proof"}
+    assert second["reads"]["tax_certificate"]["reused"]  # the certificate wasn't replaced, so its reading is kept
+
+
 def test_scan_without_ai_goes_to_a_person():
     run = wait_for(start("scanned")["run_id"])
     assert run["status"] == "pending" and run["waiting_on"] == "internal"

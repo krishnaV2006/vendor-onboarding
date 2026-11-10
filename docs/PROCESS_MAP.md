@@ -64,4 +64,5 @@ Each attempt is a new version of the same case. The case page shows every versio
 | Edge 2 | Nandi Components LLP (India) | GSTIN is valid, but its PAN and state code contradict the form | Pending |
 | Edge 3 | Apex Industrial Supplies (India) | Bank account already belongs to another vendor | Rejected, with a neutral message |
 | Edge 4 | Cedar Ridge Software LLC (US) | An invoice uploaded where the W-9 should be | Pending, then approved after resubmitting |
+| Edge 5 | Ganga Packaging Pvt Ltd (India) | Arrived by email, so it skipped the form: PAN, account number and bank document missing, and a US EIN given as the tax ID | Pending with one message listing all of it, then approved after resubmitting |
 | Bonus | Thames Valley Fabrication Ltd (UK) | Scanned bank letter that only AI can read | Approved with AI, sent to a person without it |

@@ -189,6 +189,27 @@ def main():
         },
     })
 
+    # Edge 5: an application that arrived by email, so it never passed the form's checks. Several
+    # details are missing, the bank document is missing, and the tax ID is a US EIN.
+    pan = "AAGCG5512H"
+    tax = gstin("09", pan)
+    scenarios.append({
+        "key": "incomplete", "tag": "Edge case 5", "title": "Ganga Packaging Pvt Ltd",
+        "shows": "Arrived by email, so it skipped the form. PAN, account number and bank document are missing, and the tax ID is a US EIN. The vendor is told exactly what to send.",
+        "expected": "pending", "fix_label": "Vendor sends the missing details",
+        "submission": base(legal_name="Ganga Packaging Pvt Ltd", entity_type="Private Limited", country="IN", state="Uttar Pradesh",
+                           address="C-41, Sector 63", city="Noida", postal_code="201301", contact_name="Suresh Verma",
+                           contact_email="suresh@gangapackaging.example", contact_phone="+91 98110 66778", tax_id="12-3456789", pan="",
+                           account_holder="GANGA PACKAGING PRIVATE LIMITED", bank_name="State Bank of India", account_number="", bank_code="SBIN0001789"),
+        "documents": {
+            "tax_certificate": gst_cert("ganga_gst_certificate.pdf", "Ganga Packaging Private Limited", "C-41, Sector 63, Noida, Uttar Pradesh", tax, date="2023-11-08"),
+        },
+        "fix": {
+            "changes": {"tax_id": tax, "pan": pan, "account_number": "38291047561"},
+            "documents": {"bank_proof": cheque("ganga_cancelled_cheque.pdf", "State Bank of India", "GANGA PACKAGING PRIVATE LIMITED", "38291047561", "SBIN0001789")},
+        },
+    })
+
     # Bonus: only AI can read the scan. Without it the case goes to a person instead of guessing.
     vat, iban = "GB123456782", "GB82WEST12345698765432"
     bank_letter("_thames_clean.pdf", "Westminster Commercial Bank", "Thames Valley Fabrication Limited", iban, iban, "IBAN")
